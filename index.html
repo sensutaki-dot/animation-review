@@ -2,35 +2,40 @@
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8" />
-  <title>Animation Review — Play Scene</title>
+  <title>Animation Review — Play Scene + Anotações</title>
 
   <!-- Supabase v2 UMD -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <style>
-    body{font-family:Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial; background:#0f1724; color:#e6eef8; margin:0; padding:28px;}
-    .wrap{max-width:1000px;margin:0 auto;}
-    h1{margin:0 0 18px 0;font-size:22px}
-    .card{background:#0b1220;border-radius:10px;padding:16px;margin-bottom:18px;box-shadow:0 6px 24px rgba(2,6,23,0.6)}
+    body{font-family:Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial; background:#0f1724; color:#e6eef8; margin:0; padding:22px;}
+    .wrap{max-width:1080px;margin:0 auto;}
+    h1{margin:0 0 12px 0;font-size:22px}
+    .card{background:#0b1220;border-radius:10px;padding:14px;margin-bottom:14px;box-shadow:0 6px 24px rgba(2,6,23,0.6)}
     label{display:block;margin-bottom:8px}
     input[type=file]{display:block;margin-bottom:12px}
-    button{background:#1f6feb;border:none;color:white;padding:8px 14px;border-radius:8px;cursor:pointer;margin-right:8px}
+    button{background:#1f6feb;border:none;color:white;padding:8px 12px;border-radius:8px;cursor:pointer;margin-right:8px}
     button:active{transform:translateY(1px)}
     .hint{color:#9fb0d6;font-size:13px;margin-top:8px}
-    .shots{display:flex;flex-wrap:wrap;gap:14px;margin-top:12px}
-    .shot{background:#071027;border-radius:8px;padding:12px;width:calc(50% - 14px);box-sizing:border-box}
+    .shots{display:flex;flex-wrap:wrap;gap:12px;margin-top:12px}
+    .shot{background:#071027;border-radius:8px;padding:12px;width:calc(50% - 12px);box-sizing:border-box}
     .shot h3{margin:0 0 8px 0;font-size:14px}
-    video{width:100%;border-radius:6px;background:black}
+    video{width:100%;border-radius:6px;background:black;display:block}
     .status{margin-top:8px;color:#9fb0d6;font-size:13px}
-    .sceneControls{display:flex;gap:8px;align-items:center;margin-top:12px}
+    .sceneControls{display:flex;gap:8px;align-items:center;margin-top:12px;flex-wrap:wrap}
     .currentShot{font-weight:600;margin-left:8px}
+    .playerWrap{background:#000;padding:8px;border-radius:8px;margin-top:8px;display:flex;justify-content:center}
+    .sceneCanvasWrap{position:relative; display:inline-block; max-width:100%;}
+    canvas{position:absolute; left:0; top:0; pointer-events:none}
+    .drawControls{margin-top:8px; display:flex; gap:8px; align-items:center; flex-wrap:wrap}
+    .small { padding:6px 8px }
     @media (max-width:700px){ .shot{width:100%} }
   </style>
 </head>
 <body>
   <div class="wrap">
-    <h1>Animation Review — Upload & Play Scene</h1>
+    <h1>Animation Review — Upload, Play Scene & Anotações</h1>
 
     <div class="card">
       <label for="fileInput"><strong>1) Selecione o playblast (.mov / .mp4)</strong></label>
@@ -40,7 +45,7 @@
         <button id="btnPlayScene">Play Scene</button>
         <button id="btnStopScene">Stop Scene</button>
       </div>
-      <div class="hint">Nomeie seus arquivos com padrão como <code>sh_07_v008.mov</code> ou <code>SH010_v003.mov</code> — o sistema detecta shot e versão automaticamente.</div>
+      <div class="hint">Use nomes como <code>sh_07_v008.mov</code> ou <code>SH010_v003.mov</code>. O sistema detecta shot & versão automaticamente.</div>
       <div id="status" class="status"></div>
     </div>
 
@@ -50,17 +55,30 @@
       <div id="emptyHint" class="hint"></div>
 
       <div class="card" style="margin-top:12px;background:#07122a">
-        <strong>Scene Player</strong>
-        <div id="sceneArea" style="margin-top:8px">
-          <!-- player injetado aqui -->
-          <div class="sceneControls" style="margin-bottom:8px">
+        <strong>Scene Player & Anotações</strong>
+        <div id="sceneArea" style="margin-top:10px">
+
+          <div class="sceneControls">
             <button id="scenePrev">◀ Prev</button>
             <button id="scenePlay">▶ Play</button>
             <button id="scenePause">⏸ Pause</button>
             <button id="sceneNext">Next ▶</button>
+
+            <button id="toggleDraw" class="small">Draw</button>
+            <button id="clearDraw" class="small">Clear</button>
+            <button id="saveDraw" class="small">Save Annotation</button>
+            <button id="toggleOverlay" class="small">Toggle Overlay</button>
+
+            <label style="margin-left:8px">Color: <input id="colorPicker" type="color" value="#ff2b2b" /></label>
+            <label>Brush: <input id="brushSize" type="range" min="1" max="40" value="6" /></label>
+
             <span class="currentShot" id="currentShotLabel"></span>
           </div>
-          <div id="scenePlayerWrap"></div>
+
+          <div class="playerWrap" id="scenePlayerWrap" style="margin-top:10px">
+            <!-- video + canvas will be injected here -->
+          </div>
+
         </div>
       </div>
 
@@ -68,15 +86,17 @@
   </div>
 
 <script>
-/* ====== CONFIGURE AQUI AS SUAS CHAVES (já coloquei as que você forneceu) ====== */
+/* ====== CONFIG (suas chaves já colocadas) ====== */
 const SUPABASE_URL = "https://qdnmeuxojubkijpcesry.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFkbm1ldXhvanVia2lqcGNlc3J5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMxNzM2NTAsImV4cCI6MjA4ODc0OTY1MH0.UBnWHTKw3Pw2pMgRHvpReg7sLMHwvGm5EU2kqq8990A";
-/* ========================================================================== */
+/* ============================================== */
 
 const { createClient } = window.supabase;
 const client = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const bucketName = "videos";
+
+/* --- DOM --- */
 const btnUpload = document.getElementById("btnUpload");
 const btnPlayScene = document.getElementById("btnPlayScene");
 const btnStopScene = document.getElementById("btnStopScene");
@@ -85,71 +105,67 @@ const statusEl = document.getElementById("status");
 const shotsContainer = document.getElementById("shots");
 const emptyHint = document.getElementById("emptyHint");
 
-let latestShotsMap = {}; // global com o resultado mais recente de loadShots()
+const scenePlayerWrap = document.getElementById("scenePlayerWrap");
+const currentShotLabel = document.getElementById("currentShotLabel");
+const btnScenePrev = document.getElementById("scenePrev");
+const btnScenePlay = document.getElementById("scenePlay");
+const btnScenePause = document.getElementById("scenePause");
+const btnSceneNext = document.getElementById("sceneNext");
 
+const btnToggleDraw = document.getElementById("toggleDraw");
+const btnClearDraw = document.getElementById("clearDraw");
+const btnSaveDraw = document.getElementById("saveDraw");
+const btnToggleOverlay = document.getElementById("toggleOverlay");
+const colorPicker = document.getElementById("colorPicker");
+const brushSize = document.getElementById("brushSize");
+
+let latestShotsMap = {}; // { SH07: {version, path, fileName} }
+
+/* ---------- Upload ---------- */
 btnUpload.addEventListener("click", async () => {
   const f = fileInput.files[0];
   if (!f) { alert("Selecione um arquivo antes."); return; }
-
   statusEl.textContent = "Enviando...";
 
-  // Detect shot and version from filename (flexível com underscore/maiúsculas)
   const name = f.name;
   const shotMatch = name.match(/(sh[_-]?\d+)/i);
   const versionMatch = name.match(/_v0*(\d+)/i) || name.match(/v0*(\d+)/i);
-
   if (!shotMatch || !versionMatch) {
-    if (!shotMatch) alert("Não foi possível detectar o shot no nome. Use padrão 'sh_07_v001' ou 'SH010_v001'.");
-    else alert("Não foi possível detectar a versão. Use padrão '_v001'.");
+    if (!shotMatch) alert("Não foi possível detectar o shot. Use 'sh_07_v001' ou 'SH010_v001'.");
+    else alert("Não foi possível detectar a versão. Use '_v001'.");
     statusEl.textContent = "";
     return;
   }
 
-  // normaliza a pasta do shot: exemplo 'sh_07' -> 'SH07'
-  const shotRaw = shotMatch[1].toUpperCase().replace(/[_-]/g,""); // SH07 or SH010
-  const versionNum = parseInt(versionMatch[1], 10);
-
-  // path onde vai salvar: <shotRaw>/<filename>
+  const shotRaw = shotMatch[1].toUpperCase().replace(/[_-]/g,""); // SH07
+  const versionNum = parseInt(versionMatch[1],10);
   const destPath = `${shotRaw}/${name}`;
 
   try {
-    // upsert true para sobrescrever se já existir com mesmo caminho
     const { data, error } = await client.storage.from(bucketName).upload(destPath, f, { upsert: true });
-
     if (error) {
       console.error("Upload error:", error);
       alert("Erro no upload: " + (error.message || JSON.stringify(error)));
       statusEl.textContent = "";
       return;
     }
-
     statusEl.textContent = `Upload concluído: ${shotRaw} v${versionNum.toString().padStart(3,"0")}`;
     fileInput.value = "";
-    // recarrega lista
     await loadShots();
-  } catch (err) {
-    console.error(err);
-    alert("Erro inesperado durante upload.");
+  } catch (e) {
+    console.error(e);
+    alert("Erro inesperado.");
     statusEl.textContent = "";
   }
 });
 
-/**
- * Lista arquivos no bucket e monta latestShotsMap com a última versão por shot.
- * Suporta arquivos no root e arquivos organizados em pastas (shot/file).
- */
+/* ---------- Listing & latest map ---------- */
 async function loadShots(){
   shotsContainer.innerHTML = "";
   emptyHint.textContent = "Carregando...";
-
   try {
     const { data: rootList, error: errRoot } = await client.storage.from(bucketName).list("", { limit: 1000 });
-
-    if (errRoot) {
-      console.error("Erro list root:", errRoot);
-      emptyHint.textContent = "Erro ao listar arquivos. Verifique permissões do bucket.";
-      return;
-    }
+    if (errRoot) { console.error(errRoot); emptyHint.textContent = "Erro ao listar arquivos."; return; }
 
     const shotsMap = {};
 
@@ -157,12 +173,9 @@ async function loadShots(){
       const filename = path.split("/").pop();
       const shotMatch = filename.match(/(sh[_-]?\d+)/i) || (path.match(/^(sh[_-]?\d+)/i));
       const versionMatch = filename.match(/_v0*(\d+)/i) || filename.match(/v0*(\d+)/i);
-
       if (!shotMatch || !versionMatch) return;
-
-      const shotRaw = shotMatch[1].toUpperCase().replace(/[_-]/g, ""); // e.g. "SH07" or "SH010"
-      const version = parseInt(versionMatch[1], 10);
-
+      const shotRaw = shotMatch[1].toUpperCase().replace(/[_-]/g, "");
+      const version = parseInt(versionMatch[1],10);
       if (!shotsMap[shotRaw] || shotsMap[shotRaw].version < version) {
         shotsMap[shotRaw] = { version, path, fileName: filename };
       }
@@ -171,42 +184,24 @@ async function loadShots(){
     for (const entry of rootList) {
       const name = entry.name || entry;
       if (name.match(/\.(mov|mp4|m4v)$/i)) {
-        // file at root
         processFilePath(name);
       } else {
         const { data: innerList, error: e2 } = await client.storage.from(bucketName).list(name, { limit: 1000 });
-        if (e2) {
-          processFilePath(name);
-        } else {
-          for (const f of innerList) {
-            processFilePath(`${name}/${f.name}`);
-          }
-        }
+        if (e2) processFilePath(name);
+        else for (const f of innerList) processFilePath(`${name}/${f.name}`);
       }
     }
 
-    latestShotsMap = shotsMap; // salva globalmente para o player usar
+    latestShotsMap = shotsMap;
+    const keys = Object.keys(shotsMap).sort((a,b)=>parseInt(a.replace(/[^0-9]/g,''),10) - parseInt(b.replace(/[^0-9]/g,''),10));
+    if (keys.length === 0) { emptyHint.textContent = "Nenhum shot encontrado."; latestShotsMap = {}; return; }
+    emptyHint.textContent = "";
 
-    const keys = Object.keys(shotsMap).sort((a,b)=>{
-      const na = parseInt(a.replace(/[^0-9]/g,''),10);
-      const nb = parseInt(b.replace(/[^0-9]/g,''),10);
-      return na - nb;
-    });
-
-    if (keys.length === 0) {
-      emptyHint.textContent = "Nenhum shot encontrado no bucket. Faça um upload para começar.";
-      latestShotsMap = {};
-      return;
-    } else {
-      emptyHint.textContent = "";
-    }
-
-    // Render shots (sorted)
-    shotsContainer.innerHTML = "";
+    // render
     for (const shotKey of keys) {
       const info = shotsMap[shotKey];
       const parts = info.path.split("/");
-      const encodedParts = parts.map(p => encodeURIComponent(p));
+      const encodedParts = parts.map(p=>encodeURIComponent(p));
       const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/${bucketName}/${encodedParts.join("/")}`;
 
       const wrap = document.createElement("div");
@@ -219,8 +214,8 @@ async function loadShots(){
       const vid = document.createElement("video");
       vid.src = publicUrl;
       vid.controls = true;
-      vid.setAttribute("playsinline", "");
-      vid.setAttribute("preload", "none");
+      vid.setAttribute("playsinline","");
+      vid.setAttribute("preload","none");
       wrap.appendChild(vid);
 
       shotsContainer.appendChild(wrap);
@@ -232,78 +227,213 @@ async function loadShots(){
   }
 }
 
-// ---------- Scene player logic ----------
-let scenePlaylist = []; // array of {shot, url}
+/* ---------- Scene player & Annotations overlay ---------- */
+let scenePlaylist = [];
 let sceneIndex = 0;
 let sceneVideoEl = null;
-const scenePlayerWrap = document.getElementById("scenePlayerWrap");
-const currentShotLabel = document.getElementById("currentShotLabel");
+let overlayCanvas = null;
+let overlayCtx = null;
+let isDrawing = false;
+let drawActive = false; // drawing mode enabled/disabled
+let overlayVisible = true;
+let currentAnnotationShot = null; // "SH07"
+let currentAnnotationVersion = null; // number
 
 function buildPlaylistFromLatestShots(){
-  const keys = Object.keys(latestShotsMap).sort((a,b)=>{
-    const na = parseInt(a.replace(/[^0-9]/g,''),10);
-    const nb = parseInt(b.replace(/[^0-9]/g,''),10);
-    return na - nb;
-  });
+  const keys = Object.keys(latestShotsMap).sort((a,b)=>parseInt(a.replace(/[^0-9]/g,''),10)-parseInt(b.replace(/[^0-9]/g,''),10));
   const list = [];
   for (const k of keys) {
     const info = latestShotsMap[k];
     const parts = info.path.split("/");
     const encodedParts = parts.map(p => encodeURIComponent(p));
     const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/${bucketName}/${encodedParts.join("/")}`;
-    list.push({ shot: k, url: publicUrl });
+    list.push({ shot: k, url: publicUrl, path: info.path, version: info.version, fileName: info.fileName });
   }
   return list;
 }
 
-function createOrGetSceneVideo(){
-  if (sceneVideoEl) return sceneVideoEl;
-  const vid = document.createElement("video");
-  vid.controls = true;
-  vid.width = 800;
-  vid.style.maxWidth = "100%";
-  vid.setAttribute("playsinline","");
-  vid.setAttribute("preload","auto");
+function createScenePlayerWithOverlay(){
+  // if exists, clear and recreate wrapper
   scenePlayerWrap.innerHTML = "";
-  scenePlayerWrap.appendChild(vid);
-  sceneVideoEl = vid;
+  sceneVideoEl = document.createElement("video");
+  sceneVideoEl.controls = true;
+  sceneVideoEl.width = 900;
+  sceneVideoEl.style.maxWidth = "100%";
+  sceneVideoEl.setAttribute("playsinline","");
+  sceneVideoEl.setAttribute("preload","auto");
 
-  // quando terminar um shot, avança
-  vid.addEventListener("ended", () => {
+  // wrapper for positioning
+  const wrap = document.createElement("div");
+  wrap.className = "sceneCanvasWrap";
+  wrap.style.maxWidth = "100%";
+  wrap.style.display = "inline-block";
+  wrap.style.position = "relative";
+
+  // canvas
+  overlayCanvas = document.createElement("canvas");
+  overlayCanvas.style.position = "absolute";
+  overlayCanvas.style.left = "0";
+  overlayCanvas.style.top = "0";
+  overlayCanvas.style.pointerEvents = "auto"; // to receive pointer events when drawActive true
+  overlayCanvas.width = 640;
+  overlayCanvas.height = 360;
+  overlayCanvas.style.width = "100%";
+  overlayCanvas.style.height = "100%";
+  overlayCanvas.style.zIndex = 2;
+
+  overlayCtx = overlayCanvas.getContext("2d");
+  overlayCtx.lineCap = "round";
+
+  // add elements
+  wrap.appendChild(sceneVideoEl);
+  wrap.appendChild(overlayCanvas);
+  scenePlayerWrap.appendChild(wrap);
+
+  // events: keep canvas size synced to video display size
+  function resizeCanvasToVideo(){
+    const vw = sceneVideoEl.clientWidth;
+    const vh = sceneVideoEl.clientHeight;
+    overlayCanvas.style.width = vw + "px";
+    overlayCanvas.style.height = vh + "px";
+    // set internal pixel size to video resolution while preserving aspect
+    const ratio = sceneVideoEl.videoWidth && sceneVideoEl.videoHeight ? (sceneVideoEl.videoWidth / sceneVideoEl.clientWidth) : 1;
+    const canvasW = Math.max(1, Math.round(sceneVideoEl.clientWidth));
+    const canvasH = Math.max(1, Math.round(sceneVideoEl.clientHeight));
+    overlayCanvas.width = canvasW;
+    overlayCanvas.height = canvasH;
+    // when resizing, we do not clear previous drawing (we leave pixel scale)
+  }
+
+  sceneVideoEl.addEventListener("loadedmetadata", resizeCanvasToVideo);
+  window.addEventListener("resize", resizeCanvasToVideo);
+
+  // pointer drawing
+  let lastX = 0, lastY = 0;
+
+  overlayCanvas.addEventListener("pointerdown", (e) => {
+    if (!drawActive) return;
+    isDrawing = true;
+    overlayCtx.strokeStyle = colorPicker.value;
+    overlayCtx.lineWidth = parseInt(brushSize.value,10);
+    const rect = overlayCanvas.getBoundingClientRect();
+    lastX = (e.clientX - rect.left) * (overlayCanvas.width / rect.width);
+    lastY = (e.clientY - rect.top) * (overlayCanvas.height / rect.height);
+    overlayCtx.beginPath();
+    overlayCtx.moveTo(lastX, lastY);
+    overlayCanvas.setPointerCapture(e.pointerId);
+  });
+
+  overlayCanvas.addEventListener("pointermove", (e) => {
+    if (!isDrawing) return;
+    const rect = overlayCanvas.getBoundingClientRect();
+    const x = (e.clientX - rect.left) * (overlayCanvas.width / rect.width);
+    const y = (e.clientY - rect.top) * (overlayCanvas.height / rect.height);
+    overlayCtx.lineTo(x, y);
+    overlayCtx.stroke();
+    lastX = x; lastY = y;
+  });
+
+  overlayCanvas.addEventListener("pointerup", (e) => {
+    if (!isDrawing) return;
+    isDrawing = false;
+    try { overlayCanvas.releasePointerCapture(e.pointerId); } catch(e){}
+  });
+
+  overlayCanvas.addEventListener("pointercancel", ()=> { isDrawing = false; });
+
+  // when video ends, advance
+  sceneVideoEl.addEventListener("ended", () => {
     sceneNext();
   });
 
-  return vid;
+  return sceneVideoEl;
+}
+
+/* ---------- Annotation save/load ---------- */
+async function saveCurrentAnnotation(){
+  if (!currentAnnotationShot || currentAnnotationVersion == null) { alert("Nenhum shot ativo para salvar anotação."); return; }
+  // convert canvas to blob
+  if (!overlayCanvas) { alert("Crie o player primeiro (Play Scene)."); return; }
+  const blob = await new Promise(res => overlayCanvas.toBlob(res, "image/png"));
+  if (!blob) { alert("Falha ao gerar imagem."); return; }
+
+  const remotePath = `annotations/${currentAnnotationShot}/${currentAnnotationShot}_v${String(currentAnnotationVersion).padStart(3,"0")}.png`;
+  try {
+    const { data, error } = await client.storage.from(bucketName).upload(remotePath, blob, { upsert: true });
+    if (error) { console.error("Save annotation error:", error); alert("Erro ao salvar anotação: " + (error.message||JSON.stringify(error))); return; }
+    alert("Anotação salva.");
+    // no need to reload list
+  } catch (e) {
+    console.error(e);
+    alert("Erro inesperado ao salvar anotação.");
+  }
+}
+
+async function loadAnnotationFor(shot, version){
+  // clear canvas first
+  if (!overlayCanvas || !overlayCtx) return;
+  overlayCtx.clearRect(0,0,overlayCanvas.width, overlayCanvas.height);
+
+  const fileName = `${shot}_v${String(version).padStart(3,"0")}.png`;
+  const path = `annotations/${shot}/${fileName}`;
+  const url = `${SUPABASE_URL}/storage/v1/object/public/${bucketName}/${encodeURIComponent(path)}`;
+
+  // attempt to load image
+  try {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = function(){
+      // resize canvas to match current display
+      const rect = overlayCanvas.getBoundingClientRect();
+      overlayCanvas.width = overlayCanvas.clientWidth;
+      overlayCanvas.height = overlayCanvas.clientHeight;
+      // draw image scaled to canvas
+      overlayCtx.drawImage(img, 0, 0, overlayCanvas.width, overlayCanvas.height);
+    };
+    img.onerror = function(){
+      // no saved annotation — nothing to load
+    };
+    img.src = url;
+  } catch(e){
+    console.error("loadAnnotation error", e);
+  }
+}
+
+/* ---------- Scene control functions ---------- */
+function createOrGetSceneVideo(){
+  if (sceneVideoEl) return sceneVideoEl;
+  return createScenePlayerWithOverlay();
 }
 
 async function playSceneFrom(index=0){
-  if (!latestShotsMap || Object.keys(latestShotsMap).length === 0) {
-    alert("Não há shots para tocar. Faça upload primeiro.");
-    return;
-  }
+  if (!latestShotsMap || Object.keys(latestShotsMap).length === 0) { alert("Não há shots para tocar."); return; }
   scenePlaylist = buildPlaylistFromLatestShots();
   if (scenePlaylist.length === 0) { alert("Playlist vazia."); return; }
-  sceneIndex = index;
-  const vid = createOrGetSceneVideo();
+  sceneIndex = Math.max(0, Math.min(index, scenePlaylist.length-1));
   const item = scenePlaylist[sceneIndex];
+
+  const vid = createOrGetSceneVideo();
+  // set current shot/version context for annotation saves/loads
+  currentAnnotationShot = item.shot;
+  currentAnnotationVersion = item.version;
+
+  // load annotation (async)
+  loadAnnotationFor(currentAnnotationShot, currentAnnotationVersion);
+
   vid.src = item.url;
   currentShotLabel.textContent = `${item.shot} (${sceneIndex+1}/${scenePlaylist.length})`;
-  try {
-    await vid.play();
-  } catch(e){
-    // autoplay pode ser bloqueado; usuário precisará clicar Play manualmente
-    console.warn("play blocked", e);
-  }
+  try { await vid.play(); } catch(e) { console.warn("autoplay blocked", e); }
 }
 
-function scenePause(){
-  if (sceneVideoEl) sceneVideoEl.pause();
-}
+function scenePause(){ if (sceneVideoEl) sceneVideoEl.pause(); }
 
 function sceneNext(){
   if (!scenePlaylist || scenePlaylist.length === 0) return;
   sceneIndex = Math.min(sceneIndex+1, scenePlaylist.length-1);
   const item = scenePlaylist[sceneIndex];
+  currentAnnotationShot = item.shot;
+  currentAnnotationVersion = item.version;
+  loadAnnotationFor(currentAnnotationShot, currentAnnotationVersion);
   if (!sceneVideoEl) createOrGetSceneVideo();
   sceneVideoEl.src = item.url;
   currentShotLabel.textContent = `${item.shot} (${sceneIndex+1}/${scenePlaylist.length})`;
@@ -314,6 +444,9 @@ function scenePrev(){
   if (!scenePlaylist || scenePlaylist.length === 0) return;
   sceneIndex = Math.max(sceneIndex-1, 0);
   const item = scenePlaylist[sceneIndex];
+  currentAnnotationShot = item.shot;
+  currentAnnotationVersion = item.version;
+  loadAnnotationFor(currentAnnotationShot, currentAnnotationVersion);
   if (!sceneVideoEl) createOrGetSceneVideo();
   sceneVideoEl.src = item.url;
   currentShotLabel.textContent = `${item.shot} (${sceneIndex+1}/${scenePlaylist.length})`;
@@ -325,36 +458,52 @@ function stopScene(){
     sceneVideoEl.pause();
     sceneVideoEl.currentTime = 0;
     sceneVideoEl.src = "";
-    scenePlayerWrap.innerHTML = "";
-    sceneVideoEl = null;
   }
   scenePlaylist = [];
   sceneIndex = 0;
   currentShotLabel.textContent = "";
 }
 
-// bind UI buttons
-btnPlayScene.addEventListener("click", async () => {
-  // ensure latest listing is loaded
+/* ---------- Draw UI handlers ---------- */
+btnToggleDraw.addEventListener("click", ()=> {
+  drawActive = !drawActive;
+  if (!overlayCanvas) createOrGetSceneVideo();
+  overlayCanvas.style.pointerEvents = drawActive ? "auto" : "none";
+  btnToggleDraw.textContent = drawActive ? "Drawing: ON" : "Draw";
+});
+
+btnClearDraw.addEventListener("click", ()=> {
+  if (!overlayCtx) return;
+  overlayCtx.clearRect(0,0,overlayCanvas.width, overlayCanvas.height);
+});
+
+btnSaveDraw.addEventListener("click", async ()=>{
+  // save annotation for current shot/version
+  if (!currentAnnotationShot) { alert("Nenhum shot ativo para salvar."); return; }
+  await saveCurrentAnnotation();
+});
+
+btnToggleOverlay.addEventListener("click", ()=>{
+  overlayVisible = !overlayVisible;
+  if (overlayCanvas) overlayCanvas.style.display = overlayVisible ? "block" : "none";
+  btnToggleOverlay.textContent = overlayVisible ? "Toggle Overlay" : "Overlay Hidden";
+});
+
+/* ---------- UI bindings ---------- */
+btnPlayScene.addEventListener("click", async ()=>{
   await loadShots();
   playSceneFrom(0);
 });
-btnStopScene.addEventListener("click", () => {
-  stopScene();
+btnStopScene.addEventListener("click", ()=> stopScene());
+btnSceneNext.addEventListener("click", ()=> sceneNext());
+btnScenePrev.addEventListener("click", ()=> scenePrev());
+btnScenePlay.addEventListener("click", async ()=> {
+  if (!sceneVideoEl) { await loadShots(); playSceneFrom(sceneIndex || 0); }
+  else sceneVideoEl.play().catch(()=>{});
 });
-document.getElementById("scenePlay").addEventListener("click", async ()=> {
-  if (!sceneVideoEl) {
-    await loadShots();
-    playSceneFrom(sceneIndex || 0);
-  } else {
-    sceneVideoEl.play().catch(()=>{});
-  }
-});
-document.getElementById("scenePause").addEventListener("click", ()=> scenePause());
-document.getElementById("sceneNext").addEventListener("click", ()=> sceneNext());
-document.getElementById("scenePrev").addEventListener("click", ()=> scenePrev());
+btnScenePause.addEventListener("click", ()=> scenePause());
 
-// inicializa
+/* ---------- Init ---------- */
 loadShots();
 
 </script>
