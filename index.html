@@ -1,533 +1,862 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <title>Animation Review — Frame Annotations & Time Comments</title>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>AnimReview — Shot Review Tool</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  /* ─── RESET & BASE ─────────────────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg:        #0c0d0f;
+    --bg2:       #141518;
+    --bg3:       #1c1e23;
+    --border:    #2a2d35;
+    --border2:   #373b47;
+    --text:      #e2e4ea;
+    --muted:     #6b7080;
+    --accent:    #f5a623;
+    --accent2:   #e87c1e;
+    --green:     #3ecf8e;
+    --red:       #f25c5c;
+    --blue:      #4f8cff;
+    --mono:      'IBM Plex Mono', monospace;
+    --sans:      'IBM Plex Sans', sans-serif;
+    --radius:    6px;
+    --sidebar:   280px;
+  }
+  html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font-family: var(--sans); font-size: 13px; }
 
-  <!-- Supabase v2 UMD -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  /* ─── LAYOUT ────────────────────────────────────────────────── */
+  #app { display: grid; grid-template-columns: var(--sidebar) 1fr; grid-template-rows: 48px 1fr; height: 100vh; }
+  #topbar { grid-column: 1 / -1; display: flex; align-items: center; gap: 16px; padding: 0 20px; background: var(--bg2); border-bottom: 1px solid var(--border); z-index: 10; }
+  #sidebar { background: var(--bg2); border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
+  #main { display: flex; flex-direction: column; overflow: hidden; }
 
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <style>
-    body{font-family:Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial; background:#0f1724; color:#e6eef8; margin:0; padding:22px;}
-    .wrap{max-width:1080px;margin:0 auto;}
-    h1{margin:0 0 12px 0;font-size:22px}
-    .card{background:#0b1220;border-radius:10px;padding:14px;margin-bottom:14px;box-shadow:0 6px 24px rgba(2,6,23,0.6)}
-    label{display:block;margin-bottom:8px}
-    input[type=file]{display:block;margin-bottom:12px}
-    button{background:#1f6feb;border:none;color:white;padding:8px 12px;border-radius:8px;cursor:pointer;margin-right:8px}
-    button.small{padding:6px 8px}
-    .hint{color:#9fb0d6;font-size:13px;margin-top:8px}
-    .shots{display:flex;flex-wrap:wrap;gap:12px;margin-top:12px}
-    .shot{background:#071027;border-radius:8px;padding:12px;width:calc(50% - 12px);box-sizing:border-box}
-    .shot h3{margin:0 0 8px 0;font-size:14px}
-    video{width:100%;border-radius:6px;background:black;display:block}
-    .status{margin-top:8px;color:#9fb0d6;font-size:13px}
-    .sceneControls{display:flex;gap:8px;align-items:center;margin-top:12px;flex-wrap:wrap}
-    .currentShot{font-weight:600;margin-left:8px}
-    .playerWrap{background:#000;padding:8px;border-radius:8px;margin-top:8px;display:flex;justify-content:center}
-    .sceneCanvasWrap{position:relative; display:inline-block; max-width:100%;}
-    canvas{position:absolute; left:0; top:0; pointer-events:none}
-    .drawControls{margin-top:8px; display:flex; gap:8px; align-items:center; flex-wrap:wrap}
-    .comments{margin-top:10px; max-height:220px; overflow:auto; background:#041226; padding:8px; border-radius:6px}
-    .comment{padding:6px;border-bottom:1px solid rgba(255,255,255,0.03); font-size:14px}
-    .comment time{color:#9fb0d6; font-size:12px; margin-right:8px}
-    @media (max-width:700px){ .shot{width:100%} }
-  </style>
+  /* ─── TOPBAR ────────────────────────────────────────────────── */
+  .logo { font-family: var(--mono); font-weight: 600; font-size: 14px; color: var(--accent); letter-spacing: 0.05em; flex-shrink: 0; }
+  .logo span { color: var(--muted); }
+  .topbar-spacer { flex: 1; }
+  #scene-label { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+  #btn-play-scene, #btn-export { padding: 7px 16px; border-radius: var(--radius); border: none; cursor: pointer; font-family: var(--mono); font-size: 12px; font-weight: 500; transition: all .15s; }
+  #btn-play-scene { background: var(--bg3); color: var(--text); border: 1px solid var(--border2); }
+  #btn-play-scene:hover { background: var(--border2); }
+  #btn-export { background: var(--accent); color: #000; }
+  #btn-export:hover { background: var(--accent2); }
+  #upload-btn-wrap { position: relative; }
+  #upload-btn-wrap input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+  .btn-upload { padding: 7px 14px; border-radius: var(--radius); background: var(--bg3); border: 1px solid var(--border2); color: var(--text); font-family: var(--mono); font-size: 12px; cursor: pointer; transition: all .15s; display: flex; align-items: center; gap: 6px; }
+  .btn-upload:hover { background: var(--border2); }
+  #upload-progress { display: none; align-items: center; gap: 8px; font-family: var(--mono); font-size: 11px; color: var(--accent); }
+  .spinner { width: 12px; height: 12px; border: 2px solid var(--border2); border-top-color: var(--accent); border-radius: 50%; animation: spin .6s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ─── SIDEBAR ────────────────────────────────────────────────── */
+  .sidebar-header { padding: 12px 14px 8px; font-family: var(--mono); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+  #shot-list { flex: 1; overflow-y: auto; padding: 6px; }
+  #shot-list::-webkit-scrollbar { width: 4px; }
+  #shot-list::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 4px; }
+  .shot-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: var(--radius); cursor: pointer; transition: background .12s; border: 1px solid transparent; margin-bottom: 3px; }
+  .shot-item:hover { background: var(--bg3); }
+  .shot-item.active { background: var(--bg3); border-color: var(--accent); }
+  .shot-thumb { width: 52px; height: 30px; object-fit: cover; border-radius: 3px; background: var(--bg3); flex-shrink: 0; border: 1px solid var(--border); }
+  .shot-thumb-placeholder { width: 52px; height: 30px; flex-shrink: 0; background: var(--bg3); border-radius: 3px; border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; color: var(--border2); font-size: 16px; }
+  .shot-info { flex: 1; min-width: 0; }
+  .shot-name { font-family: var(--mono); font-size: 12px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .shot-version { font-family: var(--mono); font-size: 10px; color: var(--green); margin-top: 2px; }
+  .shot-comment-count { font-family: var(--mono); font-size: 10px; color: var(--muted); margin-top: 1px; }
+  .sidebar-footer { padding: 10px 14px; border-top: 1px solid var(--border); font-family: var(--mono); font-size: 10px; color: var(--muted); }
+
+  /* ─── PLAYER AREA ──────────────────────────────────────────── */
+  #player-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: #000; position: relative; }
+  #player-wrap { position: relative; flex: 1; display: flex; align-items: center; justify-content: center; overflow: hidden; background: #000; }
+  #player-wrap video { max-width: 100%; max-height: 100%; display: block; }
+  #draw-canvas { position: absolute; top: 0; left: 0; cursor: crosshair; display: none; touch-action: none; }
+  #player-wrap.draw-mode #draw-canvas { display: block; }
+  .no-shot-placeholder { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: var(--muted); flex: 1; }
+  .no-shot-placeholder .icon { font-size: 48px; opacity: .3; }
+
+  /* ─── CONTROLS BAR ──────────────────────────────────────────── */
+  #controls-bar { background: var(--bg2); border-top: 1px solid var(--border); padding: 0 16px; display: flex; flex-direction: column; gap: 0; }
+  
+  /* Timeline / progress */
+  #timeline-wrap { position: relative; height: 36px; display: flex; align-items: center; cursor: pointer; }
+  #timeline-track { width: 100%; height: 4px; background: var(--bg3); border-radius: 2px; position: relative; }
+  #timeline-fill { height: 100%; background: var(--accent); border-radius: 2px; width: 0%; pointer-events: none; }
+  #timeline-thumb { position: absolute; top: 50%; left: 0%; transform: translate(-50%, -50%); width: 12px; height: 12px; background: var(--accent); border-radius: 50%; pointer-events: none; transition: width .1s, height .1s; }
+  #timeline-wrap:hover #timeline-thumb { width: 16px; height: 16px; }
+  .comment-marker { position: absolute; top: 50%; transform: translate(-50%, -50%); width: 8px; height: 8px; border-radius: 50%; background: var(--blue); cursor: pointer; z-index: 2; transition: transform .1s; }
+  .comment-marker:hover { transform: translate(-50%, -50%) scale(1.5); }
+
+  /* Playback buttons */
+  #playback-row { display: flex; align-items: center; gap: 12px; padding: 8px 0; }
+  .ctrl-btn { width: 36px; height: 36px; border-radius: var(--radius); border: 1px solid var(--border2); background: var(--bg3); color: var(--text); cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 14px; transition: all .12s; flex-shrink: 0; }
+  .ctrl-btn:hover { background: var(--border2); }
+  .ctrl-btn.active { background: var(--accent); color: #000; border-color: var(--accent); }
+  #btn-play-pause { width: 44px; height: 44px; font-size: 18px; background: var(--accent); color: #000; border-color: var(--accent); }
+  #btn-play-pause:hover { background: var(--accent2); }
+  #timecode { font-family: var(--mono); font-size: 13px; color: var(--text); min-width: 110px; }
+  .playback-spacer { flex: 1; }
+  #volume-wrap { display: flex; align-items: center; gap: 6px; }
+  #volume-wrap input[type=range] { width: 70px; accent-color: var(--accent); cursor: pointer; }
+  #speed-select { background: var(--bg3); border: 1px solid var(--border2); color: var(--text); font-family: var(--mono); font-size: 11px; padding: 4px 6px; border-radius: var(--radius); cursor: pointer; }
+
+  /* Draw toolbar */
+  #draw-toolbar { display: none; align-items: center; gap: 8px; padding: 6px 0; border-top: 1px solid var(--border); }
+  #draw-toolbar.visible { display: flex; }
+  .color-swatch { width: 20px; height: 20px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; transition: border-color .1s; flex-shrink: 0; }
+  .color-swatch.selected { border-color: #fff; }
+  #brush-size { width: 60px; accent-color: var(--accent); }
+  .draw-sep { width: 1px; height: 20px; background: var(--border); }
+  #btn-clear-canvas { font-family: var(--mono); font-size: 11px; padding: 4px 10px; background: var(--bg3); border: 1px solid var(--border2); color: var(--muted); border-radius: var(--radius); cursor: pointer; }
+  #btn-clear-canvas:hover { color: var(--red); border-color: var(--red); }
+  #btn-save-frame { font-family: var(--mono); font-size: 11px; padding: 4px 10px; background: var(--green); border: 1px solid var(--green); color: #000; border-radius: var(--radius); cursor: pointer; font-weight: 500; }
+
+  /* ─── RIGHT PANEL (Comments) ──────────────────────────────── */
+  #right-panel { width: 300px; border-left: 1px solid var(--border); background: var(--bg2); display: flex; flex-direction: column; overflow: hidden; }
+  #main-content { display: flex; flex: 1; overflow: hidden; }
+
+  .panel-header { padding: 12px 14px; font-family: var(--mono); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+  .panel-header span.count { background: var(--bg3); border-radius: 10px; padding: 2px 7px; font-size: 10px; color: var(--text); }
+
+  #comments-list { flex: 1; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+  #comments-list::-webkit-scrollbar { width: 4px; }
+  #comments-list::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 4px; }
+
+  .comment-card { background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 12px; cursor: pointer; transition: border-color .12s; }
+  .comment-card:hover { border-color: var(--border2); }
+  .comment-card.highlight { border-color: var(--blue); }
+  .comment-tc { font-family: var(--mono); font-size: 11px; color: var(--blue); margin-bottom: 5px; display: flex; align-items: center; gap: 6px; }
+  .comment-tc::before { content: ''; display: block; width: 6px; height: 6px; border-radius: 50%; background: var(--blue); flex-shrink: 0; }
+  .comment-text { font-size: 12px; line-height: 1.5; color: var(--text); word-break: break-word; }
+  .comment-actions { display: none; gap: 6px; margin-top: 8px; }
+  .comment-card:hover .comment-actions { display: flex; }
+  .comment-actions button { font-family: var(--mono); font-size: 10px; padding: 3px 8px; border-radius: 3px; border: 1px solid var(--border2); background: transparent; cursor: pointer; color: var(--muted); transition: all .12s; }
+  .comment-actions .btn-edit { color: var(--text); }
+  .comment-actions .btn-edit:hover { background: var(--bg); }
+  .comment-actions .btn-del { color: var(--red); border-color: transparent; }
+  .comment-actions .btn-del:hover { background: rgba(242,92,92,.1); border-color: var(--red); }
+
+  #comment-input-wrap { padding: 10px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; }
+  #comment-tc-display { font-family: var(--mono); font-size: 11px; color: var(--blue); }
+  #comment-input { width: 100%; background: var(--bg3); border: 1px solid var(--border2); color: var(--text); border-radius: var(--radius); padding: 8px 10px; font-family: var(--sans); font-size: 12px; resize: none; height: 60px; transition: border-color .12s; }
+  #comment-input:focus { outline: none; border-color: var(--accent); }
+  #btn-add-comment { width: 100%; padding: 8px; background: var(--accent); color: #000; border: none; border-radius: var(--radius); font-family: var(--mono); font-size: 12px; font-weight: 600; cursor: pointer; transition: background .12s; }
+  #btn-add-comment:hover { background: var(--accent2); }
+
+  /* ─── TOAST ─────────────────────────────────────────────────── */
+  #toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(20px); background: var(--bg2); border: 1px solid var(--border2); color: var(--text); font-family: var(--mono); font-size: 12px; padding: 10px 20px; border-radius: 20px; opacity: 0; pointer-events: none; transition: all .25s; z-index: 999; }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  #toast.ok { border-color: var(--green); color: var(--green); }
+  #toast.err { border-color: var(--red); color: var(--red); }
+
+  /* ─── MODAL ─────────────────────────────────────────────────── */
+  #modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.7); z-index: 100; align-items: center; justify-content: center; }
+  #modal-overlay.open { display: flex; }
+  .modal-box { background: var(--bg2); border: 1px solid var(--border2); border-radius: 10px; padding: 24px; width: 380px; }
+  .modal-box h3 { font-family: var(--mono); font-size: 14px; margin-bottom: 16px; }
+  .modal-box input, .modal-box textarea { width: 100%; background: var(--bg3); border: 1px solid var(--border2); color: var(--text); border-radius: var(--radius); padding: 8px 10px; font-family: var(--sans); font-size: 13px; margin-bottom: 10px; }
+  .modal-box input:focus, .modal-box textarea:focus { outline: none; border-color: var(--accent); }
+  .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 4px; }
+  .modal-actions button { padding: 7px 16px; border-radius: var(--radius); font-family: var(--mono); font-size: 12px; cursor: pointer; border: 1px solid var(--border2); }
+  .btn-cancel { background: transparent; color: var(--muted); }
+  .btn-confirm { background: var(--accent); color: #000; border-color: var(--accent); font-weight: 600; }
+  .btn-cancel:hover { color: var(--text); }
+
+  /* ─── SCROLLBAR GLOBAL ───────────────────────────────────────── */
+  * { scrollbar-width: thin; scrollbar-color: var(--border2) transparent; }
+</style>
 </head>
 <body>
-  <div class="wrap">
-    <h1>Animation Review — Frame Annotations & Comments</h1>
 
-    <div class="card">
-      <label for="fileInput"><strong>1) Selecione o playblast (.mov / .mp4)</strong></label>
-      <input id="fileInput" type="file" accept="video/*" />
-      <div style="margin-top:8px;">
-        <button id="btnUpload">Upload</button>
-        <button id="btnPlayScene">Play Scene</button>
-        <button id="btnStopScene">Stop Scene</button>
-      </div>
-      <div class="hint">Use nomes como <code>sh_07_v008.mov</code> ou <code>SH010_v003.mov</code>. O sistema detecta shot & versão automaticamente.</div>
-      <div id="status" class="status"></div>
+<div id="app">
+
+  <!-- TOPBAR -->
+  <header id="topbar">
+    <div class="logo">ANIM<span>/</span>REVIEW</div>
+    <div id="upload-btn-wrap">
+      <label class="btn-upload">⬆ Upload Shot<input type="file" id="file-input" accept="video/*" multiple /></label>
     </div>
+    <div id="upload-progress"><div class="spinner"></div><span id="upload-label">Uploading…</span></div>
+    <div class="topbar-spacer"></div>
+    <div id="scene-label">— no scene —</div>
+    <button id="btn-play-scene">▶ Play Scene</button>
+    <button id="btn-export">⬇ Export Scene</button>
+  </header>
 
-    <div class="card">
-      <strong>2) Cena — últimas versões de cada shot</strong>
-      <div id="shots" class="shots"></div>
-      <div id="emptyHint" class="hint"></div>
+  <!-- SIDEBAR -->
+  <aside id="sidebar">
+    <div class="sidebar-header">
+      Shots
+      <span id="shot-count" style="color:var(--text)">0</span>
+    </div>
+    <div id="shot-list"><div style="padding:20px 14px;color:var(--muted);font-family:var(--mono);font-size:11px;">No shots yet.<br>Upload a file like<br><b style="color:var(--text)">sh_01_v001.mp4</b></div></div>
+    <div class="sidebar-footer" id="sidebar-footer"></div>
+  </aside>
 
-      <div class="card" style="margin-top:12px;background:#07122a">
-        <strong>Scene Player, Frame Annotations & Time Comments</strong>
-        <div id="sceneArea" style="margin-top:10px">
+  <!-- MAIN -->
+  <main id="main">
+    <div id="main-content">
 
-          <div class="sceneControls">
-            <button id="scenePrev">◀ Prev</button>
-            <button id="scenePlay">▶ Play</button>
-            <button id="scenePause">⏸ Pause</button>
-            <button id="sceneNext">Next ▶</button>
-
-            <button id="toggleDraw" class="small">Draw</button>
-            <button id="clearDraw" class="small">Clear</button>
-            <button id="saveFrame" class="small">Save Frame Annotation</button>
-            <button id="saveFull" class="small">Save Full Annotation</button>
-            <button id="toggleOverlay" class="small">Toggle Overlay</button>
-
-            <label style="margin-left:8px">Color: <input id="colorPicker" type="color" value="#ff2b2b" /></label>
-            <label>Brush: <input id="brushSize" type="range" min="1" max="40" value="6" /></label>
-
-            <span class="currentShot" id="currentShotLabel"></span>
-          </div>
-
-          <div class="playerWrap" id="scenePlayerWrap" style="margin-top:10px">
-            <!-- video + canvas injected here -->
-          </div>
-
-          <div style="margin-top:10px;">
-            <label><strong>Add comment at current time</strong></label>
-            <div style="display:flex; gap:8px; align-items:center; margin-top:6px;">
-              <input id="commentInput" placeholder="Escreva seu comentário..." style="flex:1; padding:8px; border-radius:6px; border:1px solid #23314b; background:#07122a; color:white">
-              <button id="addComment" class="small">Add Comment at time</button>
+      <!-- PLAYER + CONTROLS -->
+      <div style="flex:1;display:flex;flex-direction:column;overflow:hidden;">
+        <div id="player-area">
+          <div id="player-wrap">
+            <div class="no-shot-placeholder" id="placeholder">
+              <div class="icon">🎬</div>
+              <div style="font-family:var(--mono);font-size:12px;">Select a shot to begin review</div>
             </div>
+            <video id="video" style="display:none;" preload="auto"></video>
+            <canvas id="draw-canvas"></canvas>
+          </div>
+        </div>
 
-            <div class="comments" id="commentsList" aria-live="polite"></div>
+        <div id="controls-bar">
+          <!-- Timeline -->
+          <div id="timeline-wrap">
+            <div id="timeline-track">
+              <div id="timeline-fill"></div>
+              <div id="timeline-thumb"></div>
+              <div id="comment-markers"></div>
+            </div>
           </div>
 
+          <!-- Playback row -->
+          <div id="playback-row">
+            <button class="ctrl-btn" id="btn-prev-shot" title="Previous Shot">⏮</button>
+            <button class="ctrl-btn" id="btn-step-back" title="Step -1s">◀</button>
+            <button class="ctrl-btn" id="btn-play-pause">▶</button>
+            <button class="ctrl-btn" id="btn-step-fwd" title="Step +1s">▶</button>
+            <button class="ctrl-btn" id="btn-next-shot" title="Next Shot">⏭</button>
+            <div id="timecode" class="mono">00:00 / 00:00</div>
+            <div class="playback-spacer"></div>
+            <div id="volume-wrap">🔊 <input type="range" id="volume" min="0" max="1" step="0.05" value="1" /></div>
+            <select id="speed-select">
+              <option value="0.25">0.25×</option>
+              <option value="0.5">0.5×</option>
+              <option value="1" selected>1×</option>
+              <option value="1.5">1.5×</option>
+              <option value="2">2×</option>
+            </select>
+            <button class="ctrl-btn" id="btn-draw" title="Toggle Draw Mode">✏️</button>
+            <button class="ctrl-btn" id="btn-fullscreen" title="Fullscreen">⛶</button>
+          </div>
+
+          <!-- Draw toolbar -->
+          <div id="draw-toolbar">
+            <div class="color-swatch selected" style="background:#f5a623" data-color="#f5a623"></div>
+            <div class="color-swatch" style="background:#f25c5c" data-color="#f25c5c"></div>
+            <div class="color-swatch" style="background:#4f8cff" data-color="#4f8cff"></div>
+            <div class="color-swatch" style="background:#3ecf8e" data-color="#3ecf8e"></div>
+            <div class="color-swatch" style="background:#fff" data-color="#fff"></div>
+            <div class="draw-sep"></div>
+            <input type="range" id="brush-size" min="2" max="24" value="4" title="Brush size" />
+            <div class="draw-sep"></div>
+            <button id="btn-clear-canvas">Clear</button>
+            <button id="btn-save-frame">Save Frame ✓</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- RIGHT PANEL -->
+      <div id="right-panel">
+        <div class="panel-header">Comments <span class="count" id="comment-count">0</span></div>
+        <div id="comments-list"></div>
+        <div id="comment-input-wrap">
+          <div id="comment-tc-display">@ 00:00</div>
+          <textarea id="comment-input" placeholder="Add a comment at this frame…"></textarea>
+          <button id="btn-add-comment">Add Comment</button>
         </div>
       </div>
 
     </div>
+  </main>
+</div>
+
+<!-- MODAL -->
+<div id="modal-overlay">
+  <div class="modal-box">
+    <h3 id="modal-title">Edit Comment</h3>
+    <textarea id="modal-input" rows="3" style="resize:none;height:80px;"></textarea>
+    <div class="modal-actions">
+      <button class="btn-cancel" id="modal-cancel">Cancel</button>
+      <button class="btn-confirm" id="modal-confirm">Save</button>
+    </div>
   </div>
+</div>
+
+<!-- TOAST -->
+<div id="toast"></div>
 
 <script>
-/* ====== CONFIG (suas chaves já colocadas) ====== */
-const SUPABASE_URL = "https://qdnmeuxojubkijpcesry.supabase.co";
-const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFkbm1ldXhvanVia2lqcGNlc3J5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMxNzM2NTAsImV4cCI6MjA4ODc0OTY1MH0.UBnWHTKw3Pw2pMgRHvpReg7sLMHwvGm5EU2kqq8990A";
-/* ============================================== */
+// ─── CONFIG — substitua com suas credenciais do Supabase ──────────────────
+const SUPABASE_URL    = "https://qdnmeuxojubkijpcesry.supabase.co";
+const SUPABASE_ANON   = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFkbm1ldXhvanVia2lqcGNlc3J5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMxNzM2NTAsImV4cCI6MjA4ODc0OTY1MH0.UBnWHTKw3Pw2pMgRHvpReg7sLMHwvGm5EU2kqq8990A";
+const BUCKET          = "videos";
+const EXPORT_SERVICE  = "https://SEU_SERVICO/export-scene"; // URL do container (preencher depois)
+// ─────────────────────────────────────────────────────────────────────────
 
-const { createClient } = window.supabase;
-const client = createClient(SUPABASE_URL, SUPABASE_KEY);
-const bucketName = "videos";
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
 
-/* DOM */
-const btnUpload = document.getElementById("btnUpload");
-const btnPlayScene = document.getElementById("btnPlayScene");
-const btnStopScene = document.getElementById("btnStopScene");
-const fileInput = document.getElementById("fileInput");
-const statusEl = document.getElementById("status");
-const shotsContainer = document.getElementById("shots");
-const emptyHint = document.getElementById("emptyHint");
-const scenePlayerWrap = document.getElementById("scenePlayerWrap");
-const currentShotLabel = document.getElementById("currentShotLabel");
-const btnScenePrev = document.getElementById("scenePrev");
-const btnScenePlay = document.getElementById("scenePlay");
-const btnScenePause = document.getElementById("scenePause");
-const btnSceneNext = document.getElementById("sceneNext");
-const btnToggleDraw = document.getElementById("toggleDraw");
-const btnClearDraw = document.getElementById("clearDraw");
-const btnSaveFrame = document.getElementById("saveFrame");
-const btnSaveFull = document.getElementById("saveFull");
-const btnToggleOverlay = document.getElementById("toggleOverlay");
-const colorPicker = document.getElementById("colorPicker");
-const brushSize = document.getElementById("brushSize");
-const commentInput = document.getElementById("commentInput");
-const addCommentBtn = document.getElementById("addComment");
-const commentsList = document.getElementById("commentsList");
+// ─── STATE ────────────────────────────────────────────────────────────────
+let shots = {};       // { shotKey: { version, path, fileName, url } }
+let shotOrder = [];   // sorted shot keys
+let currentShot = null;
+let isSceneMode = false;
+let sceneIdx = 0;
+let drawMode = false;
+let drawColor = "#f5a623";
+let drawSize = 4;
+let isDrawing = false;
+let lastX = 0, lastY = 0;
+let annotations = {};   // { shotKey: { full: dataURL, frames: { "1.23": dataURL } } }
+let comments = {};      // { shotKey: [ {time, text, id} ] }
+let editingCommentId = null;
 
-let latestShotsMap = {}; // { SH07: {version, path, fileName} }
-let scenePlaylist = [];
-let sceneIndex = 0;
-let sceneVideoEl = null;
-let overlayCanvas = null;
-let overlayCtx = null;
-let drawActive = false;
-let overlayVisible = true;
-let currentAnnotationShot = null;
-let currentAnnotationVersion = null;
+// ─── DOM refs ─────────────────────────────────────────────────────────────
+const video          = document.getElementById("video");
+const canvas         = document.getElementById("draw-canvas");
+const ctx            = canvas.getContext("2d");
+const playerWrap     = document.getElementById("player-wrap");
+const placeholder    = document.getElementById("placeholder");
+const timelineFill   = document.getElementById("timeline-fill");
+const timelineThumb  = document.getElementById("timeline-thumb");
+const timelineWrap   = document.getElementById("timeline-wrap");
+const commentMarkers = document.getElementById("comment-markers");
+const timecodeEl     = document.getElementById("timecode");
+const commentTcEl    = document.getElementById("comment-tc-display");
+const commentsList   = document.getElementById("comments-list");
+const commentCount   = document.getElementById("comment-count");
+const commentInput   = document.getElementById("comment-input");
+const shotList       = document.getElementById("shot-list");
+const shotCountEl    = document.getElementById("shot-count");
+const sceneLabel     = document.getElementById("scene-label");
+const sidebarFooter  = document.getElementById("sidebar-footer");
+const uploadProgress = document.getElementById("upload-progress");
+const uploadLabel    = document.getElementById("upload-label");
+const drawToolbar    = document.getElementById("draw-toolbar");
+const toast          = document.getElementById("toast");
+const modalOverlay   = document.getElementById("modal-overlay");
 
-/* ---------- Upload (same as before) ---------- */
-btnUpload.addEventListener("click", async () => {
-  const f = fileInput.files[0];
-  if (!f) { alert("Selecione um arquivo antes."); return; }
-  statusEl.textContent = "Enviando...";
+// ─── HELPERS ──────────────────────────────────────────────────────────────
+function fmt(t) {
+  if (!isFinite(t)) return "00:00";
+  const m = Math.floor(t / 60), s = Math.floor(t % 60);
+  return `${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`;
+}
 
-  const name = f.name;
-  const shotMatch = name.match(/(sh[_-]?\d+)/i);
-  const versionMatch = name.match(/_v0*(\d+)/i) || name.match(/v0*(\d+)/i);
-  if (!shotMatch || !versionMatch) {
-    if (!shotMatch) alert("Não foi possível detectar o shot. Use 'sh_07_v001' ou 'SH010_v001'.");
-    else alert("Não foi possível detectar a versão. Use '_v001'.");
-    statusEl.textContent = "";
+let toastTimer;
+function showToast(msg, type = "") {
+  toast.textContent = msg;
+  toast.className = "show " + type;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { toast.className = ""; }, 2800);
+}
+
+function parseShot(filename, fullPath) {
+  const shotMatch = filename.match(/(sh[_-]?\d+)/i) || fullPath.match(/^(sh[_-]?\d+)/i);
+  const verMatch  = filename.match(/_v0*(\d+)/i) || filename.match(/v0*(\d+)/i);
+  if (!shotMatch || !verMatch) return null;
+  return {
+    shotKey: shotMatch[1].toUpperCase().replace(/[_-]/, ""),
+    version: parseInt(verMatch[1], 10),
+  };
+}
+
+function publicUrl(path) {
+  return `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/${path.split("/").map(encodeURIComponent).join("/")}`;
+}
+
+// ─── LOAD SHOTS FROM SUPABASE ─────────────────────────────────────────────
+async function loadShots() {
+  const { data, error } = await sb.storage.from(BUCKET).list("", { limit: 500 });
+  if (error) { showToast("Failed to load shots: " + error.message, "err"); return; }
+
+  shots = {};
+  for (const entry of data) {
+    const name = entry.name;
+    if (/\.(mov|mp4|m4v|webm)$/i.test(name)) {
+      processEntry(name, name);
+    } else if (entry.metadata == null) {
+      // It's a folder
+      const { data: inner } = await sb.storage.from(BUCKET).list(name, { limit: 500 });
+      if (inner) inner.forEach(f => processEntry(f.name, `${name}/${f.name}`));
+    }
+  }
+
+  shotOrder = Object.keys(shots).sort((a, b) =>
+    parseInt(a.replace(/\D/g,"") || 0) - parseInt(b.replace(/\D/g,"") || 0)
+  );
+  renderShotList();
+}
+
+function processEntry(filename, path) {
+  if (!/\.(mov|mp4|m4v|webm)$/i.test(filename)) return;
+  const parsed = parseShot(filename, path);
+  if (!parsed) return;
+  const { shotKey, version } = parsed;
+  if (!shots[shotKey] || shots[shotKey].version < version) {
+    shots[shotKey] = { version, path, fileName: filename, url: publicUrl(path) };
+  }
+}
+
+// ─── RENDER SHOT LIST ─────────────────────────────────────────────────────
+function renderShotList() {
+  shotCountEl.textContent = shotOrder.length;
+  sceneLabel.textContent = shotOrder.length ? `Scene — ${shotOrder.length} shot${shotOrder.length > 1 ? "s" : ""}` : "— no scene —";
+
+  if (!shotOrder.length) {
+    shotList.innerHTML = `<div style="padding:20px 14px;color:var(--muted);font-family:var(--mono);font-size:11px;">No shots yet.<br>Upload a file like<br><b style="color:var(--text)">sh_01_v001.mp4</b></div>`;
     return;
   }
 
-  const shotRaw = shotMatch[1].toUpperCase().replace(/[_-]/g,""); // SH07
-  const versionNum = parseInt(versionMatch[1],10);
-  const destPath = `${shotRaw}/${name}`;
+  shotList.innerHTML = "";
+  shotOrder.forEach(key => {
+    const s = shots[key];
+    const coms = comments[key] || [];
+    const item = document.createElement("div");
+    item.className = "shot-item" + (key === currentShot ? " active" : "");
+    item.dataset.key = key;
 
-  try {
-    const { data, error } = await client.storage.from(bucketName).upload(destPath, f, { upsert: true });
-    if (error) { console.error("Upload error:", error); alert("Erro no upload: "+(error.message||JSON.stringify(error))); statusEl.textContent=""; return; }
-    statusEl.textContent = `Upload concluído: ${shotRaw} v${versionNum.toString().padStart(3,"0")}`;
-    fileInput.value = "";
-    await loadShots();
-  } catch (e) {
-    console.error(e);
-    alert("Erro inesperado.");
-    statusEl.textContent = "";
-  }
+    const thumb = document.createElement("div");
+    thumb.className = "shot-thumb-placeholder";
+    thumb.textContent = "🎥";
+    thumb.style.fontSize = "14px";
+
+    const info = document.createElement("div");
+    info.className = "shot-info";
+    info.innerHTML = `<div class="shot-name">${key}</div><div class="shot-version">v${String(s.version).padStart(3,"0")}</div>${coms.length ? `<div class="shot-comment-count">💬 ${coms.length}</div>` : ""}`;
+
+    item.appendChild(thumb);
+    item.appendChild(info);
+    item.addEventListener("click", () => loadShot(key));
+    shotList.appendChild(item);
+  });
+}
+
+// ─── LOAD A SHOT ─────────────────────────────────────────────────────────
+async function loadShot(key) {
+  if (!shots[key]) return;
+  currentShot = key;
+  isSceneMode = false;
+
+  placeholder.style.display = "none";
+  video.style.display = "block";
+  video.src = shots[key].url;
+  video.load();
+
+  await loadAnnotations(key);
+  await loadComments(key);
+
+  renderShotList();
+  renderComments();
+  updateTimecode();
+  updateCommentTc();
+  renderMarkers();
+}
+
+// ─── VIDEO EVENTS ────────────────────────────────────────────────────────
+video.addEventListener("timeupdate", () => {
+  updateTimeline();
+  updateTimecode();
+  updateCommentTc();
+  syncCanvasAnnotation();
 });
 
-/* ---------- Listing & latest map (same as before) ---------- */
-async function loadShots(){
-  shotsContainer.innerHTML = "";
-  emptyHint.textContent = "Carregando...";
-  try {
-    const { data: rootList, error: errRoot } = await client.storage.from(bucketName).list("", { limit: 1000 });
-    if (errRoot) { console.error(errRoot); emptyHint.textContent = "Erro ao listar arquivos."; return; }
-    const shotsMap = {};
-    function processFilePath(path) {
-      const filename = path.split("/").pop();
-      const shotMatch = filename.match(/(sh[_-]?\d+)/i) || (path.match(/^(sh[_-]?\d+)/i));
-      const versionMatch = filename.match(/_v0*(\d+)/i) || filename.match(/v0*(\d+)/i);
-      if (!shotMatch || !versionMatch) return;
-      const shotRaw = shotMatch[1].toUpperCase().replace(/[_-]/g, "");
-      const version = parseInt(versionMatch[1],10);
-      if (!shotsMap[shotRaw] || shotsMap[shotRaw].version < version) {
-        shotsMap[shotRaw] = { version, path, fileName: filename };
-      }
-    }
-    for (const entry of rootList) {
-      const name = entry.name || entry;
-      if (name.match(/\.(mov|mp4|m4v)$/i)) processFilePath(name);
-      else {
-        const { data: innerList, error: e2 } = await client.storage.from(bucketName).list(name, { limit: 1000 });
-        if (e2) processFilePath(name); else for (const f of innerList) processFilePath(`${name}/${f.name}`);
-      }
-    }
-    latestShotsMap = shotsMap;
-    const keys = Object.keys(shotsMap).sort((a,b)=>parseInt(a.replace(/[^0-9]/g,''),10) - parseInt(b.replace(/[^0-9]/g,''),10));
-    if (keys.length === 0) { emptyHint.textContent = "Nenhum shot encontrado."; latestShotsMap = {}; return; }
-    emptyHint.textContent = "";
-    shotsContainer.innerHTML = "";
-    for (const shotKey of keys) {
-      const info = shotsMap[shotKey];
-      const parts = info.path.split("/");
-      const encodedParts = parts.map(p=>encodeURIComponent(p));
-      const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/${bucketName}/${encodedParts.join("/")}`;
-      const wrap = document.createElement("div");
-      wrap.className = "shot";
-      const title = document.createElement("h3");
-      title.textContent = `${shotKey} — v${info.version.toString().padStart(3,"0")}`;
-      wrap.appendChild(title);
-      const vid = document.createElement("video");
-      vid.src = publicUrl;
-      vid.controls = true;
-      vid.setAttribute("playsinline","");
-      vid.setAttribute("preload","none");
-      wrap.appendChild(vid);
-      shotsContainer.appendChild(wrap);
-    }
-  } catch (err) { console.error("Erro loadShots:", err); emptyHint.textContent = "Erro inesperado ao carregar arquivos."; }
-}
+video.addEventListener("loadedmetadata", () => {
+  sizeCanvas();
+  updateTimecode();
+});
 
-/* ---------- Scene player & overlay (like previous) ---------- */
-function buildPlaylistFromLatestShots(){
-  const keys = Object.keys(latestShotsMap).sort((a,b)=>parseInt(a.replace(/[^0-9]/g,''),10)-parseInt(b.replace(/[^0-9]/g,''),10));
-  const list = [];
-  for (const k of keys) {
-    const info = latestShotsMap[k];
-    const parts = info.path.split("/");
-    const encodedParts = parts.map(p => encodeURIComponent(p));
-    const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/${bucketName}/${encodedParts.join("/")}`;
-    list.push({ shot: k, url: publicUrl, path: info.path, version: info.version, fileName: info.fileName });
+video.addEventListener("ended", () => {
+  if (isSceneMode) {
+    sceneIdx++;
+    if (sceneIdx < shotOrder.length) loadShotForScene(sceneIdx);
+    else { isSceneMode = false; updatePlayBtn(); }
   }
-  return list;
+  updatePlayBtn();
+});
+
+video.addEventListener("play",  updatePlayBtn);
+video.addEventListener("pause", updatePlayBtn);
+
+function updatePlayBtn() {
+  document.getElementById("btn-play-pause").textContent = video.paused ? "▶" : "⏸";
 }
 
-function createScenePlayerWithOverlay(){
-  scenePlayerWrap.innerHTML = "";
-  sceneVideoEl = document.createElement("video");
-  sceneVideoEl.controls = true;
-  sceneVideoEl.width = 900;
-  sceneVideoEl.style.maxWidth = "100%";
-  sceneVideoEl.setAttribute("playsinline","");
-  sceneVideoEl.setAttribute("preload","auto");
+function updateTimecode() {
+  timecodeEl.textContent = `${fmt(video.currentTime)} / ${fmt(video.duration)}`;
+}
 
-  const wrap = document.createElement("div");
-  wrap.className = "sceneCanvasWrap";
-  wrap.style.position = "relative";
+function updateTimeline() {
+  const pct = video.duration ? (video.currentTime / video.duration) * 100 : 0;
+  timelineFill.style.width = pct + "%";
+  timelineThumb.style.left = pct + "%";
+}
 
-  overlayCanvas = document.createElement("canvas");
-  overlayCanvas.style.position = "absolute";
-  overlayCanvas.style.left = "0";
-  overlayCanvas.style.top = "0";
-  overlayCanvas.style.pointerEvents = "none";
-  overlayCanvas.style.zIndex = 2;
+function updateCommentTc() {
+  commentTcEl.textContent = `@ ${fmt(video.currentTime)}`;
+}
 
-  overlayCtx = overlayCanvas.getContext("2d");
-  overlayCtx.lineCap = "round";
+function updateTimecode() {
+  timecodeEl.textContent = `${fmt(video.currentTime)} / ${fmt(video.duration)}`;
+}
 
-  wrap.appendChild(sceneVideoEl);
-  wrap.appendChild(overlayCanvas);
-  scenePlayerWrap.appendChild(wrap);
+// ─── TIMELINE SCRUB ───────────────────────────────────────────────────────
+let scrubbing = false;
 
-  function resizeCanvasToVideo(){
-    const canvasW = Math.max(1, Math.round(sceneVideoEl.clientWidth));
-    const canvasH = Math.max(1, Math.round(sceneVideoEl.clientHeight));
-    overlayCanvas.width = canvasW;
-    overlayCanvas.height = canvasH;
-    overlayCanvas.style.width = canvasW + "px";
-    overlayCanvas.style.height = canvasH + "px";
+function scrubTo(e) {
+  const rect = timelineWrap.getBoundingClientRect();
+  const x = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
+  const pct = x / rect.width;
+  if (video.duration) video.currentTime = pct * video.duration;
+}
+
+timelineWrap.addEventListener("mousedown", e => { scrubbing = true; scrubTo(e); });
+document.addEventListener("mousemove", e => { if (scrubbing) scrubTo(e); });
+document.addEventListener("mouseup", () => { scrubbing = false; });
+
+// ─── MARKERS ─────────────────────────────────────────────────────────────
+function renderMarkers() {
+  commentMarkers.innerHTML = "";
+  if (!currentShot || !video.duration) return;
+  (comments[currentShot] || []).forEach(c => {
+    const pct = (c.time / video.duration) * 100;
+    const m = document.createElement("div");
+    m.className = "comment-marker";
+    m.style.left = pct + "%";
+    m.title = `${fmt(c.time)}: ${c.text.slice(0,40)}`;
+    m.addEventListener("click", e => { e.stopPropagation(); video.currentTime = c.time; highlightComment(c.id); });
+    commentMarkers.appendChild(m);
+  });
+}
+
+video.addEventListener("loadedmetadata", renderMarkers);
+
+// ─── CONTROLS ────────────────────────────────────────────────────────────
+document.getElementById("btn-play-pause").addEventListener("click", () => {
+  video.paused ? video.play() : video.pause();
+});
+document.getElementById("btn-step-back").addEventListener("click", () => { video.currentTime = Math.max(0, video.currentTime - 1); });
+document.getElementById("btn-step-fwd").addEventListener("click",  () => { video.currentTime = Math.min(video.duration || 0, video.currentTime + 1); });
+document.getElementById("btn-prev-shot").addEventListener("click", () => prevNextShot(-1));
+document.getElementById("btn-next-shot").addEventListener("click", () => prevNextShot(1));
+document.getElementById("volume").addEventListener("input", e => { video.volume = e.target.value; });
+document.getElementById("speed-select").addEventListener("change", e => { video.playbackRate = parseFloat(e.target.value); });
+document.getElementById("btn-fullscreen").addEventListener("click", () => { playerWrap.requestFullscreen?.() || playerWrap.webkitRequestFullscreen?.(); });
+
+function prevNextShot(dir) {
+  if (!currentShot) return;
+  const idx = shotOrder.indexOf(currentShot);
+  const next = shotOrder[idx + dir];
+  if (next) loadShot(next);
+}
+
+// Keyboard shortcuts
+document.addEventListener("keydown", e => {
+  if (e.target.tagName === "TEXTAREA" || e.target.tagName === "INPUT") return;
+  if (e.code === "Space") { e.preventDefault(); video.paused ? video.play() : video.pause(); }
+  if (e.code === "ArrowLeft")  video.currentTime = Math.max(0, video.currentTime - (e.shiftKey ? 5 : 1));
+  if (e.code === "ArrowRight") video.currentTime = Math.min(video.duration||0, video.currentTime + (e.shiftKey ? 5 : 1));
+  if (e.code === "KeyD") document.getElementById("btn-draw").click();
+});
+
+// ─── PLAY SCENE ───────────────────────────────────────────────────────────
+document.getElementById("btn-play-scene").addEventListener("click", () => {
+  if (!shotOrder.length) return;
+  isSceneMode = true;
+  sceneIdx = 0;
+  loadShotForScene(0);
+});
+
+function loadShotForScene(idx) {
+  const key = shotOrder[idx];
+  if (!key) return;
+  currentShot = key;
+  placeholder.style.display = "none";
+  video.style.display = "block";
+  video.src = shots[key].url;
+  video.load();
+  video.play();
+  loadAnnotations(key).then(() => loadComments(key).then(() => { renderShotList(); renderComments(); renderMarkers(); }));
+}
+
+// ─── EXPORT SCENE ────────────────────────────────────────────────────────
+document.getElementById("btn-export").addEventListener("click", async () => {
+  if (!EXPORT_SERVICE || EXPORT_SERVICE.includes("YOUR_EXPORT")) {
+    showToast("Export service URL not configured.", "err"); return;
   }
-
-  sceneVideoEl.addEventListener("loadedmetadata", resizeCanvasToVideo);
-  window.addEventListener("resize", resizeCanvasToVideo);
-
-  // pointer drawing
-  let isDrawing = false;
-  let lastX = 0, lastY = 0;
-
-  overlayCanvas.addEventListener("pointerdown", (e) => {
-    if (!drawActive) return;
-    isDrawing = true;
-    overlayCtx.strokeStyle = colorPicker.value;
-    overlayCtx.lineWidth = parseInt(brushSize.value,10);
-    const rect = overlayCanvas.getBoundingClientRect();
-    lastX = (e.clientX - rect.left) * (overlayCanvas.width / rect.width);
-    lastY = (e.clientY - rect.top) * (overlayCanvas.height / rect.height);
-    overlayCtx.beginPath();
-    overlayCtx.moveTo(lastX, lastY);
-    overlayCanvas.setPointerCapture(e.pointerId);
-  });
-
-  overlayCanvas.addEventListener("pointermove", (e) => {
-    if (!isDrawing) return;
-    const rect = overlayCanvas.getBoundingClientRect();
-    const x = (e.clientX - rect.left) * (overlayCanvas.width / rect.width);
-    const y = (e.clientY - rect.top) * (overlayCanvas.height / rect.height);
-    overlayCtx.lineTo(x, y);
-    overlayCtx.stroke();
-    lastX = x; lastY = y;
-  });
-
-  overlayCanvas.addEventListener("pointerup", (e) => {
-    if (!isDrawing) return;
-    isDrawing = false;
-    try { overlayCanvas.releasePointerCapture(e.pointerId); } catch(e){}
-  });
-
-  overlayCanvas.addEventListener("pointercancel", ()=> { isDrawing = false; });
-
-  sceneVideoEl.addEventListener("ended", () => sceneNext());
-
-  return sceneVideoEl;
-}
-
-/* ---------- Frame annotation saving / loading ---------- */
-async function saveFrameAnnotation(){
-  if (!currentAnnotationShot || currentAnnotationVersion == null) { alert("Nenhum shot ativo."); return; }
-  if (!overlayCanvas) { alert("Crie o player primeiro (Play Scene)."); return; }
+  showToast("Exporting… this may take a minute.", "");
   try {
-    const ms = Math.round(sceneVideoEl.currentTime * 1000);
-    const blob = await new Promise(res => overlayCanvas.toBlob(res, "image/png"));
-    const remotePath = `annotations/${currentAnnotationShot}/frames/${currentAnnotationShot}_v${String(currentAnnotationVersion).padStart(3,"0")}_t${ms}.png`;
-    const { data, error } = await client.storage.from(bucketName).upload(remotePath, blob, { upsert: true });
-    if (error) { console.error("saveFrame error", error); alert("Erro ao salvar anotação de frame: " + (error.message||JSON.stringify(error))); return; }
-    alert("Anotação do frame salva.");
-    // after save, reload comments/list if needed
-  } catch (e) { console.error(e); alert("Erro ao salvar anotação."); }
-}
-
-async function loadClosestFrameAnnotation(shot, version){
-  if (!overlayCanvas || !overlayCtx) return;
-  // clear canvas
-  overlayCtx.clearRect(0,0,overlayCanvas.width, overlayCanvas.height);
-
-  // list files in annotations/<shot>/frames
-  try {
-    const listPath = `annotations/${shot}/frames`;
-    const { data: files, error } = await client.storage.from(bucketName).list(listPath, { limit: 1000 });
-    if (error || !files || files.length===0) return;
-    // compute current ms
-    const nowMs = Math.round(sceneVideoEl.currentTime * 1000);
-    // find matching files with pattern ..._v###_t{ms}.png
-    let best = null;
-    for (const f of files){
-      const m = f.name.match(new RegExp(`${shot}_v0*${String(version)}_t(\\d+)\\.png`));
-      if (m) {
-        const fileMs = parseInt(m[1],10);
-        const diff = Math.abs(fileMs - nowMs);
-        if (!best || diff < best.diff) best = {file: f.name, diff, ms: fileMs};
-      }
-    }
-    if (!best) return;
-    const path = `${listPath}/${best.file}`;
-    const url = `${SUPABASE_URL}/storage/v1/object/public/${bucketName}/${encodeURIComponent(path)}`;
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.onload = function(){
-      // resize canvas to display size
-      overlayCanvas.width = overlayCanvas.clientWidth;
-      overlayCanvas.height = overlayCanvas.clientHeight;
-      overlayCtx.clearRect(0,0,overlayCanvas.width, overlayCanvas.height);
-      overlayCtx.drawImage(img, 0, 0, overlayCanvas.width, overlayCanvas.height);
-    };
-    img.onerror = ()=>{};
-    img.src = url;
-  } catch (e) { console.error("loadClosestFrameAnnotation", e); }
-}
-
-/* ---------- Full annotation save (as before) ---------- */
-async function saveFullAnnotation(){
-  if (!currentAnnotationShot || currentAnnotationVersion == null) { alert("Nenhum shot ativo."); return; }
-  if (!overlayCanvas) { alert("Crie o player primeiro (Play Scene)."); return; }
-  try {
-    const blob = await new Promise(res => overlayCanvas.toBlob(res, "image/png"));
-    const remotePath = `annotations/${currentAnnotationShot}/${currentAnnotationShot}_v${String(currentAnnotationVersion).padStart(3,"0")}.png`;
-    const { data, error } = await client.storage.from(bucketName).upload(remotePath, blob, { upsert: true });
-    if (error) { console.error("saveFull error", error); alert("Erro ao salvar anotação: " + (error.message||JSON.stringify(error))); return; }
-    alert("Anotação salva (full).");
-  } catch (e) { console.error(e); alert("Erro ao salvar anotação."); }
-}
-
-/* ---------- Comments (per-shot JSON) ---------- */
-async function loadCommentsFor(shot){
-  commentsList.innerHTML = "Carregando comentários...";
-  const path = `annotations/${shot}/${shot}_comments.json`;
-  try {
-    const { data, error } = await client.storage.from(bucketName).download(path);
-    if (error) { commentsList.innerHTML = "<i>Nenhum comentário.</i>"; return []; }
-    const text = await data.text();
-    const arr = JSON.parse(text || "[]");
-    renderComments(arr);
-    return arr;
-  } catch (e) { console.error("loadCommentsFor", e); commentsList.innerHTML = "<i>Erro carregando comentários</i>"; return []; }
-}
-
-function renderComments(arr){
-  if (!arr || arr.length===0) { commentsList.innerHTML = "<i>Nenhum comentário.</i>"; return; }
-  // sort by time
-  arr.sort((a,b)=>a.time_ms - b.time_ms);
-  commentsList.innerHTML = "";
-  for (const c of arr) {
-    const div = document.createElement("div");
-    div.className = "comment";
-    const timeStr = new Date(c.created_at).toLocaleString();
-    const seconds = (c.time_ms/1000).toFixed(2);
-    div.innerHTML = `<time>${seconds}s — ${timeStr}</time><div>${escapeHtml(c.text)}</div>`;
-    div.style.cursor = "pointer";
-    div.addEventListener("click", ()=> {
-      // seek to time
-      if (sceneVideoEl) {
-        sceneVideoEl.currentTime = c.time_ms/1000;
-        sceneVideoEl.play().catch(()=>{});
-      }
+    const res = await fetch(EXPORT_SERVICE, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ shots: shotOrder }),
     });
-    commentsList.appendChild(div);
+    const json = await res.json();
+    if (json.ok) {
+      showToast("Export ready!", "ok");
+      window.open(json.url, "_blank");
+    } else {
+      showToast("Export error: " + json.error, "err");
+    }
+  } catch (e) {
+    showToast("Export failed: " + e.message, "err");
+  }
+});
+
+// ─── UPLOAD ───────────────────────────────────────────────────────────────
+document.getElementById("file-input").addEventListener("change", async e => {
+  const files = Array.from(e.target.files);
+  if (!files.length) return;
+  uploadProgress.style.display = "flex";
+
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i];
+    uploadLabel.textContent = `Uploading ${i+1}/${files.length}: ${file.name}`;
+    const parsed = parseShot(file.name, file.name);
+    if (!parsed) { showToast(`Skipped: ${file.name} — name format not recognized`, "err"); continue; }
+    const { shotKey, version } = parsed;
+    const remotePath = `${shotKey}/${file.name}`;
+    const { error } = await sb.storage.from(BUCKET).upload(remotePath, file, { upsert: true });
+    if (error) { showToast("Upload failed: " + error.message, "err"); }
+    else { showToast(`Uploaded: ${file.name}`, "ok"); }
+  }
+
+  uploadProgress.style.display = "none";
+  e.target.value = "";
+  await loadShots();
+});
+
+// ─── DRAW ────────────────────────────────────────────────────────────────
+document.getElementById("btn-draw").addEventListener("click", () => {
+  drawMode = !drawMode;
+  document.getElementById("btn-draw").classList.toggle("active", drawMode);
+  playerWrap.classList.toggle("draw-mode", drawMode);
+  drawToolbar.classList.toggle("visible", drawMode);
+  if (drawMode) { video.pause(); restoreFrameAnnotation(); }
+});
+
+document.querySelectorAll(".color-swatch").forEach(sw => {
+  sw.addEventListener("click", () => {
+    document.querySelectorAll(".color-swatch").forEach(s => s.classList.remove("selected"));
+    sw.classList.add("selected");
+    drawColor = sw.dataset.color;
+  });
+});
+
+document.getElementById("brush-size").addEventListener("input", e => { drawSize = parseInt(e.target.value); });
+
+function sizeCanvas() {
+  const vr = video.getBoundingClientRect();
+  canvas.width  = vr.width;
+  canvas.height = vr.height;
+  canvas.style.width  = vr.width + "px";
+  canvas.style.height = vr.height + "px";
+  canvas.style.left = (vr.left - playerWrap.getBoundingClientRect().left) + "px";
+  canvas.style.top  = (vr.top  - playerWrap.getBoundingClientRect().top)  + "px";
+}
+
+new ResizeObserver(sizeCanvas).observe(playerWrap);
+
+canvas.addEventListener("pointerdown", e => {
+  if (!drawMode) return;
+  isDrawing = true;
+  const {x, y} = canvasXY(e);
+  lastX = x; lastY = y;
+  ctx.beginPath();
+  ctx.arc(x, y, drawSize / 2, 0, Math.PI * 2);
+  ctx.fillStyle = drawColor;
+  ctx.fill();
+});
+canvas.addEventListener("pointermove", e => {
+  if (!isDrawing) return;
+  const {x, y} = canvasXY(e);
+  ctx.beginPath();
+  ctx.moveTo(lastX, lastY);
+  ctx.lineTo(x, y);
+  ctx.strokeStyle = drawColor;
+  ctx.lineWidth = drawSize;
+  ctx.lineCap = "round";
+  ctx.stroke();
+  lastX = x; lastY = y;
+});
+canvas.addEventListener("pointerup", () => { isDrawing = false; });
+
+function canvasXY(e) {
+  const rect = canvas.getBoundingClientRect();
+  return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+}
+
+document.getElementById("btn-clear-canvas").addEventListener("click", () => {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+});
+
+document.getElementById("btn-save-frame").addEventListener("click", async () => {
+  if (!currentShot) return;
+  const frameKey = video.currentTime.toFixed(2);
+  if (!annotations[currentShot]) annotations[currentShot] = { frames: {} };
+  annotations[currentShot].frames[frameKey] = canvas.toDataURL();
+  await saveAnnotations(currentShot);
+  showToast("Frame annotation saved ✓", "ok");
+});
+
+function restoreFrameAnnotation() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  if (!currentShot) return;
+  const frameKey = video.currentTime.toFixed(2);
+  const img64 = annotations[currentShot]?.frames?.[frameKey];
+  if (img64) {
+    const img = new Image();
+    img.onload = () => ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    img.src = img64;
   }
 }
 
-function escapeHtml(s){ return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+function syncCanvasAnnotation() {
+  if (!drawMode) return;
+  restoreFrameAnnotation();
+}
 
-async function addCommentAtCurrentTime(){
-  if (!currentAnnotationShot) { alert("Nenhum shot ativo."); return; }
-  const text = commentInput.value.trim();
-  if (!text) { alert("Digite um comentário."); return; }
-  const path = `annotations/${currentAnnotationShot}/${currentAnnotationShot}_comments.json`;
+// ─── ANNOTATIONS (Supabase Storage) ──────────────────────────────────────
+function annotationsPath(key) {
+  return `annotations/${key}_annotations.json`;
+}
+
+async function loadAnnotations(key) {
   try {
-    // read existing
-    let existing = [];
-    const { data: dl, error: de } = await client.storage.from(bucketName).download(path);
-    if (!de) {
-      const t = await dl.text();
-      existing = JSON.parse(t || "[]");
-    }
-    const obj = { time_ms: Math.round(sceneVideoEl.currentTime*1000), text, created_at: new Date().toISOString() };
-    existing.push(obj);
-    const blob = new Blob([JSON.stringify(existing, null, 2)], { type: "application/json" });
-    const { data, error } = await client.storage.from(bucketName).upload(path, blob, { upsert: true });
-    if (error) { console.error("save comment error", error); alert("Erro ao salvar comentário: "+(error.message||JSON.stringify(error))); return; }
-    commentInput.value = "";
-    await loadCommentsFor(currentAnnotationShot);
-  } catch (e) { console.error("addCommentAtCurrentTime", e); alert("Erro ao salvar comentário."); }
+    const url = publicUrl(annotationsPath(key));
+    const res = await fetch(url);
+    if (res.ok) annotations[key] = await res.json();
+    else annotations[key] = { frames: {} };
+  } catch { annotations[key] = { frames: {} }; }
 }
 
-/* ---------- Scene functions (play/next/prev etc) ---------- */
-function createOrGetSceneVideo(){ if (sceneVideoEl) return sceneVideoEl; return createScenePlayerWithOverlay(); }
-
-async function playSceneFrom(index=0){
-  if (!latestShotsMap || Object.keys(latestShotsMap).length === 0) { alert("Não há shots para tocar."); return; }
-  scenePlaylist = buildPlaylistFromLatestShots();
-  if (scenePlaylist.length === 0) { alert("Playlist vazia."); return; }
-  sceneIndex = Math.max(0, Math.min(index, scenePlaylist.length-1));
-  const item = scenePlaylist[sceneIndex];
-  const vid = createOrGetSceneVideo();
-  currentAnnotationShot = item.shot;
-  currentAnnotationVersion = item.version;
-  // load frame annotation closest
-  await loadCommentsFor(currentAnnotationShot);
-  await loadClosestFrameAnnotation(currentAnnotationShot, currentAnnotationVersion);
-  vid.src = item.url;
-  currentShotLabel.textContent = `${item.shot} (${sceneIndex+1}/${scenePlaylist.length})`;
-  try { await vid.play(); } catch(e) { console.warn("autoplay blocked", e); }
+async function saveAnnotations(key) {
+  const blob = new Blob([JSON.stringify(annotations[key])], { type: "application/json" });
+  await sb.storage.from(BUCKET).upload(annotationsPath(key), blob, { upsert: true });
 }
 
-function scenePause(){ if (sceneVideoEl) sceneVideoEl.pause(); }
-function sceneNext(){
-  if (!scenePlaylist || scenePlaylist.length === 0) return;
-  sceneIndex = Math.min(sceneIndex+1, scenePlaylist.length-1);
-  const item = scenePlaylist[sceneIndex];
-  currentAnnotationShot = item.shot;
-  currentAnnotationVersion = item.version;
-  loadCommentsFor(currentAnnotationShot);
-  loadClosestFrameAnnotation(currentAnnotationShot, currentAnnotationVersion);
-  if (!sceneVideoEl) createOrGetSceneVideo();
-  sceneVideoEl.src = item.url;
-  currentShotLabel.textContent = `${item.shot} (${sceneIndex+1}/${scenePlaylist.length})`;
-  sceneVideoEl.play().catch(()=>{});
-}
-function scenePrev(){
-  if (!scenePlaylist || scenePlaylist.length === 0) return;
-  sceneIndex = Math.max(sceneIndex-1, 0);
-  const item = scenePlaylist[sceneIndex];
-  currentAnnotationShot = item.shot;
-  currentAnnotationVersion = item.version;
-  loadCommentsFor(currentAnnotationShot);
-  loadClosestFrameAnnotation(currentAnnotationShot, currentAnnotationVersion);
-  if (!sceneVideoEl) createOrGetSceneVideo();
-  sceneVideoEl.src = item.url;
-  currentShotLabel.textContent = `${item.shot} (${sceneIndex+1}/${scenePlaylist.length})`;
-  sceneVideoEl.play().catch(()=>{});
-}
-function stopScene(){
-  if (sceneVideoEl) { sceneVideoEl.pause(); sceneVideoEl.currentTime=0; sceneVideoEl.src=""; }
-  scenePlaylist=[]; sceneIndex=0; currentShotLabel.textContent="";
+// ─── COMMENTS (Supabase Storage JSON) ────────────────────────────────────
+function commentsPath(key) {
+  return `annotations/${key}_comments.json`;
 }
 
-/* ---------- Draw UI handlers ---------- */
-btnToggleDraw.addEventListener("click", ()=> {
-  drawActive = !drawActive;
-  if (!overlayCanvas) createOrGetSceneVideo();
-  overlayCanvas.style.pointerEvents = drawActive ? "auto" : "none";
-  btnToggleDraw.textContent = drawActive ? "Drawing: ON" : "Draw";
+async function loadComments(key) {
+  try {
+    const url = publicUrl(commentsPath(key));
+    const res = await fetch(url);
+    if (res.ok) comments[key] = await res.json();
+    else comments[key] = [];
+  } catch { comments[key] = []; }
+}
+
+async function saveComments(key) {
+  const blob = new Blob([JSON.stringify(comments[key])], { type: "application/json" });
+  await sb.storage.from(BUCKET).upload(commentsPath(key), blob, { upsert: true });
+}
+
+document.getElementById("btn-add-comment").addEventListener("click", addComment);
+commentInput.addEventListener("keydown", e => { if (e.key === "Enter" && e.ctrlKey) addComment(); });
+
+async function addComment() {
+  const text = commentInput.value.trim();
+  if (!text || !currentShot) return;
+  const c = { id: Date.now().toString(36) + Math.random().toString(36).slice(2), time: video.currentTime, text };
+  if (!comments[currentShot]) comments[currentShot] = [];
+  comments[currentShot].push(c);
+  comments[currentShot].sort((a,b) => a.time - b.time);
+  commentInput.value = "";
+  await saveComments(currentShot);
+  renderComments();
+  renderMarkers();
+  renderShotList();
+  showToast("Comment added", "ok");
+}
+
+function renderComments() {
+  const list = comments[currentShot] || [];
+  commentCount.textContent = list.length;
+  commentsList.innerHTML = "";
+  if (!list.length) {
+    commentsList.innerHTML = `<div style="padding:16px;color:var(--muted);font-family:var(--mono);font-size:11px;text-align:center;">No comments yet.<br>Play & pause, then type below.</div>`;
+    return;
+  }
+  list.forEach(c => {
+    const card = document.createElement("div");
+    card.className = "comment-card";
+    card.dataset.id = c.id;
+    card.innerHTML = `
+      <div class="comment-tc">${fmt(c.time)}</div>
+      <div class="comment-text">${escHtml(c.text)}</div>
+      <div class="comment-actions">
+        <button class="btn-edit" data-id="${c.id}">Edit</button>
+        <button class="btn-del" data-id="${c.id}">Delete</button>
+      </div>`;
+    card.addEventListener("click", e => {
+      if (e.target.closest(".comment-actions")) return;
+      video.currentTime = c.time;
+      highlightComment(c.id);
+    });
+    card.querySelector(".btn-edit").addEventListener("click", () => openEditModal(c.id));
+    card.querySelector(".btn-del").addEventListener("click",  () => deleteComment(c.id));
+    commentsList.appendChild(card);
+  });
+}
+
+function highlightComment(id) {
+  document.querySelectorAll(".comment-card").forEach(el => el.classList.toggle("highlight", el.dataset.id === id));
+}
+
+function escHtml(str) {
+  return str.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+// ─── EDIT MODAL ───────────────────────────────────────────────────────────
+function openEditModal(id) {
+  const c = (comments[currentShot] || []).find(x => x.id === id);
+  if (!c) return;
+  editingCommentId = id;
+  document.getElementById("modal-input").value = c.text;
+  modalOverlay.classList.add("open");
+  document.getElementById("modal-input").focus();
+}
+
+document.getElementById("modal-cancel").addEventListener("click", () => {
+  modalOverlay.classList.remove("open");
+  editingCommentId = null;
 });
-btnClearDraw.addEventListener("click", ()=> { if (!overlayCtx) return; overlayCtx.clearRect(0,0,overlayCanvas.width, overlayCanvas.height); });
-btnSaveFrame.addEventListener("click", ()=> saveFrameAnnotation());
-btnSaveFull.addEventListener("click", ()=> saveFullAnnotation());
-btnToggleOverlay.addEventListener("click", ()=> { overlayVisible = !overlayVisible; if (overlayCanvas) overlayCanvas.style.display = overlayVisible ? "block" : "none"; btnToggleOverlay.textContent = overlayVisible ? "Toggle Overlay" : "Overlay Hidden"; });
 
-btnScenePlay.addEventListener("click", async ()=> { if (!sceneVideoEl) { await loadShots(); playSceneFrom(sceneIndex || 0); } else sceneVideoEl.play().catch(()=>{}); });
-btnScenePause.addEventListener("click", ()=> scenePause());
-btnSceneNext.addEventListener("click", ()=> sceneNext());
-btnScenePrev.addEventListener("click", ()=> scenePrev());
-btnPlayScene.addEventListener("click", async ()=> { await loadShots(); playSceneFrom(0); });
-btnStopScene.addEventListener("click", ()=> stopScene());
+document.getElementById("modal-confirm").addEventListener("click", async () => {
+  const text = document.getElementById("modal-input").value.trim();
+  if (!text || !editingCommentId || !currentShot) return;
+  const c = comments[currentShot].find(x => x.id === editingCommentId);
+  if (c) c.text = text;
+  await saveComments(currentShot);
+  renderComments();
+  modalOverlay.classList.remove("open");
+  editingCommentId = null;
+  showToast("Comment updated", "ok");
+});
 
-addCommentBtn.addEventListener("click", ()=> addCommentAtCurrentTime());
+async function deleteComment(id) {
+  if (!currentShot) return;
+  comments[currentShot] = (comments[currentShot] || []).filter(c => c.id !== id);
+  await saveComments(currentShot);
+  renderComments();
+  renderMarkers();
+  renderShotList();
+  showToast("Comment deleted", "");
+}
 
-/* ---------- Init ---------- */
+// ─── INIT ────────────────────────────────────────────────────────────────
 loadShots();
 
+// Auto-refresh every 30s (multi-user)
+setInterval(loadShots, 30000);
 </script>
 </body>
 </html>
