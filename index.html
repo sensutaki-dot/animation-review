@@ -1,66 +1,124 @@
 <!DOCTYPE html>
 <html>
 <head>
+<meta charset="UTF-8">
 <title>Animation Review</title>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
+
+<style>
+body{
+font-family:Arial;
+background:#111;
+color:white;
+padding:40px;
+}
+
+video{
+margin-top:10px;
+margin-bottom:40px;
+border-radius:6px;
+}
+
+button{
+padding:8px 20px;
+}
+</style>
+
 </head>
 
 <body>
 
-<h1>Upload Shot</h1>
+<h1>Animation Shot Review</h1>
 
-<input type="file" id="file">
+<h2>Upload Shot</h2>
+
+<input type="file" id="fileInput">
 <button onclick="upload()">Upload</button>
 
 <h2>Shots</h2>
+
 <div id="shots"></div>
 
 <script>
 
-let shots = {}
+const SUPABASE_URL = "https://qdnmeuxojubkijpcesry.supabase.co"
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFkbm1ldXhvanVia2lqcGNlc3J5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMxNzM2NTAsImV4cCI6MjA4ODc0OTY1MH0.UBnWHTKw3Pw2pMgRHvpReg7sLMHwvGm5EU2kqq8990A"
 
-function upload(){
-let file = document.getElementById("file").files[0]
+const supabase = window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
 
-let name = file.name
+async function upload(){
 
-let match = name.match(/(SH\d+)_v(\d+)/i)
+let file = document.getElementById("fileInput").files[0]
 
-if(!match){
-alert("Use nome tipo SH010_v001.mov")
+if(!file){
+alert("Select a file")
 return
 }
 
-let shot = match[1]
-let version = parseInt(match[2])
+let name = file.name
 
-if(!shots[shot] || shots[shot].version < version){
-shots[shot] = {version:version, file:URL.createObjectURL(file)}
+let shotMatch = name.match(/sh_(\d+)/)
+let versionMatch = name.match(/v(\d+)/)
+
+let shot = shotMatch ? shotMatch[1] : "unknown"
+let version = versionMatch ? versionMatch[1] : "1"
+
+let path = `${shot}/${name}`
+
+let {data,error} = await supabase.storage
+.from("videos")
+.upload(path,file,{upsert:true})
+
+if(error){
+alert("Upload error")
+console.log(error)
+return
 }
 
-render()
+loadShots()
+
 }
 
-function render(){
+async function loadShots(){
+
+let {data,error} = await supabase.storage
+.from("videos")
+.list("",{limit:100})
 
 let div = document.getElementById("shots")
+
 div.innerHTML=""
 
-for(let s in shots){
+for(let folder of data){
 
-let v = shots[s]
+let {data:files} = await supabase.storage
+.from("videos")
+.list(folder.name)
+
+for(let file of files){
+
+let url = `${SUPABASE_URL}/storage/v1/object/public/videos/${folder.name}/${file.name}`
+
+let shot = folder.name
+
+div.innerHTML += `<h3>Shot ${shot}</h3>`
 
 let video = document.createElement("video")
-video.src = v.file
+
+video.src = url
 video.controls = true
 video.width = 400
-
-div.innerHTML += "<h3>"+s+" v"+v.version+"</h3>"
 
 div.appendChild(video)
 
 }
 
 }
+
+}
+
+loadShots()
 
 </script>
 
