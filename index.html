@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Animation Review</title>
+</head>
+
+<body>
+
+<h1>Upload Shot</h1>
+
+<input type="file" id="file">
+<button onclick="upload()">Upload</button>
+
+<h2>Shots</h2>
+<div id="shots"></div>
+
+<script>
+
+let shots = {}
+
+function upload(){
+let file = document.getElementById("file").files[0]
+
+let name = file.name
+
+let match = name.match(/(SH\d+)_v(\d+)/i)
+
+if(!match){
+alert("Use nome tipo SH010_v001.mov")
+return
+}
+
+let shot = match[1]
+let version = parseInt(match[2])
+
+if(!shots[shot] || shots[shot].version < version){
+shots[shot] = {version:version, file:URL.createObjectURL(file)}
+}
+
+render()
+}
+
+function render(){
+
+let div = document.getElementById("shots")
+div.innerHTML=""
+
+for(let s in shots){
+
+let v = shots[s]
+
+let video = document.createElement("video")
+video.src = v.file
+video.controls = true
+video.width = 400
+
+div.innerHTML += "<h3>"+s+" v"+v.version+"</h3>"
+
+div.appendChild(video)
+
+}
+
+}
+
+</script>
+
+</body>
+</html>
