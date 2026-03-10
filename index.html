@@ -1,126 +1,220 @@
 <!DOCTYPE html>
-<html>
+<html lang="pt-BR">
 <head>
-<meta charset="UTF-8">
-<title>Animation Review</title>
+  <meta charset="utf-8" />
+  <title>Animation Review - Supabase</title>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
+  <!-- Supabase client -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
 
-<style>
-body{
-font-family:Arial;
-background:#111;
-color:white;
-padding:40px;
-}
-
-video{
-margin-top:10px;
-margin-bottom:40px;
-border-radius:6px;
-}
-
-button{
-padding:8px 20px;
-}
-</style>
-
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    body{font-family:Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial; background:#0f1724; color:#e6eef8; margin:0; padding:28px;}
+    .wrap{max-width:1000px;margin:0 auto;}
+    h1{margin:0 0 18px 0;font-size:22px}
+    .card{background:#0b1220;border-radius:10px;padding:16px;margin-bottom:18px;box-shadow:0 6px 24px rgba(2,6,23,0.6)}
+    label{display:block;margin-bottom:8px}
+    input[type=file]{display:block;margin-bottom:12px}
+    button{background:#1f6feb;border:none;color:white;padding:8px 14px;border-radius:8px;cursor:pointer}
+    button:active{transform:translateY(1px)}
+    .hint{color:#9fb0d6;font-size:13px;margin-top:8px}
+    .shots{display:flex;flex-wrap:wrap;gap:14px;margin-top:12px}
+    .shot{background:#071027;border-radius:8px;padding:12px;width:calc(50% - 14px);box-sizing:border-box}
+    .shot h3{margin:0 0 8px 0;font-size:14px}
+    video{width:100%;border-radius:6px;background:black}
+    .status{margin-top:8px;color:#9fb0d6;font-size:13px}
+    @media (max-width:700px){ .shot{width:100%} }
+  </style>
 </head>
-
 <body>
+  <div class="wrap">
+    <h1>Animation Review — Upload & Scene</h1>
 
-<h1>Animation Shot Review</h1>
+    <div class="card">
+      <label for="fileInput"><strong>1) Selecione o playblast (.mov / .mp4)</strong></label>
+      <input id="fileInput" type="file" accept="video/*" />
+      <div>
+        <button id="btnUpload">Upload</button>
+      </div>
+      <div class="hint">Nomeie seus arquivos com padrão como <code>sh_07_v008.mov</code> ou <code>SH010_v003.mov</code> — o sistema detecta shot e versão automaticamente.</div>
+      <div id="status" class="status"></div>
+    </div>
 
-<h2>Upload Shot</h2>
-
-<input type="file" id="fileInput">
-<button onclick="upload()">Upload</button>
-
-<h2>Shots</h2>
-
-<div id="shots"></div>
+    <div class="card">
+      <strong>2) Cena — últimas versões de cada shot</strong>
+      <div id="shots" class="shots"></div>
+      <div id="emptyHint" class="hint"></div>
+    </div>
+  </div>
 
 <script>
+/* ====== CONFIGURE AQUI AS SUAS CHAVES (já coloquei as que você forneceu) ====== */
+const SUPABASE_URL = "https://qdnmeuxojubkijpcesry.supabase.co";
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFkbm1ldXhvanVia2lqcGNlc3J5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMxNzM2NTAsImV4cCI6MjA4ODc0OTY1MH0.UBnWHTKw3Pw2pMgRHvpReg7sLMHwvGm5EU2kqq8990A";
+/* ========================================================================== */
 
-const SUPABASE_URL = "https://qdnmeuxojubkijpcesry.supabase.co"
-const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFkbm1ldXhvanVia2lqcGNlc3J5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMxNzM2NTAsImV4cCI6MjA4ODc0OTY1MH0.UBnWHTKw3Pw2pMgRHvpReg7sLMHwvGm5EU2kqq8990A"
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-const supabase = window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY)
+const bucketName = "videos";
+const btnUpload = document.getElementById("btnUpload");
+const fileInput = document.getElementById("fileInput");
+const statusEl = document.getElementById("status");
+const shotsContainer = document.getElementById("shots");
+const emptyHint = document.getElementById("emptyHint");
 
-async function upload(){
+btnUpload.addEventListener("click", async () => {
+  const f = fileInput.files[0];
+  if (!f) { alert("Selecione um arquivo antes."); return; }
 
-let file = document.getElementById("fileInput").files[0]
+  statusEl.textContent = "Enviando...";
 
-if(!file){
-alert("Select a file")
-return
-}
+  // Detect shot and version from filename (flexível com underscore/maiúsculas)
+  const name = f.name;
+  // busca padrão tipo sh_07 ou SH07 ou SH010
+  const shotMatch = name.match(/(sh[_-]?\d+)/i);
+  const versionMatch = name.match(/_v0*(\d+)/i) || name.match(/v0*(\d+)/i);
 
-let name = file.name
+  if (!shotMatch || !versionMatch) {
+    if (!shotMatch) alert("Não foi possível detectar o shot no nome. Use padrão 'sh_07_v001' ou 'SH010_v001'.");
+    else alert("Não foi possível detectar a versão. Use padrão '_v001'.");
+    statusEl.textContent = "";
+    return;
+  }
 
-let shotMatch = name.match(/sh_(\d+)/)
-let versionMatch = name.match(/v(\d+)/)
+  // normaliza o nome da pasta do shot: exemplo 'sh_07' -> 'SH07'
+  const shotRaw = shotMatch[1].toUpperCase().replace("_",""); // SH07 or SH010
+  const versionNum = parseInt(versionMatch[1], 10);
 
-let shot = shotMatch ? shotMatch[1] : "unknown"
-let version = versionMatch ? versionMatch[1] : "1"
+  // path onde vai salvar: <shotRaw>/<filename>
+  const destPath = `${shotRaw}/${name}`;
 
-let path = `${shot}/${name}`
+  try {
+    // upsert true para sobrescrever se já existir com mesmo caminho
+    const { data, error } = await supabase.storage.from(bucketName).upload(destPath, f, { upsert: true });
 
-let {data,error} = await supabase.storage
-.from("videos")
-.upload(path,file,{upsert:true})
+    if (error) {
+      console.error("Upload error:", error);
+      alert("Erro no upload: " + (error.message || JSON.stringify(error)));
+      statusEl.textContent = "";
+      return;
+    }
 
-if(error){
-alert("Upload error")
-console.log(error)
-return
-}
+    statusEl.textContent = `Upload concluído: ${shotRaw} v${versionNum.toString().padStart(3,"0")}`;
+    fileInput.value = "";
+    // recarrega lista
+    await loadShots();
+  } catch (err) {
+    console.error(err);
+    alert("Erro inesperado durante upload.");
+    statusEl.textContent = "";
+  }
+});
 
-loadShots()
-
-}
-
+/**
+ * Lista arquivos no bucket e monta um mapa com a última versão por shot.
+ * Suporta arquivos no root e arquivos organizados em pastas (shot/file).
+ */
 async function loadShots(){
+  shotsContainer.innerHTML = "";
+  emptyHint.textContent = "Carregando...";
 
-let {data,error} = await supabase.storage
-.from("videos")
-.list("",{limit:100})
+  try {
+    // lista entradas no root
+    const { data: rootList, error: errRoot } = await supabase.storage.from(bucketName).list("", { limit: 1000 });
 
-let div = document.getElementById("shots")
+    if (errRoot) {
+      console.error("Erro list root:", errRoot);
+      emptyHint.textContent = "Erro ao listar arquivos. Verifique permissões do bucket.";
+      return;
+    }
 
-div.innerHTML=""
+    // mapa temporário: key = shotRaw, value = { version:int, path:string, fileName:string }
+    const shotsMap = {};
 
-for(let folder of data){
+    // função utilitária para processar um arquivo path e atualizar shotsMap
+    function processFilePath(path) {
+      // path may be "SH07/sh_07_v001.mov" or "sh_07_v001.mov"
+      const filename = path.split("/").pop();
+      const shotMatch = filename.match(/(sh[_-]?\d+)/i) || (path.match(/^(sh[_-]?\d+)/i));
+      const versionMatch = filename.match(/_v0*(\d+)/i) || filename.match(/v0*(\d+)/i);
 
-let {data:files} = await supabase.storage
-.from("videos")
-.list(folder.name)
+      if (!shotMatch || !versionMatch) return;
 
-for(let file of files){
+      const shotRaw = shotMatch[1].toUpperCase().replace("_", ""); // e.g. "SH07" or "SH010"
+      const version = parseInt(versionMatch[1], 10);
 
-let url = `${SUPABASE_URL}/storage/v1/object/public/videos/${folder.name}/${file.name}`
+      // if not present or found higher version, replace
+      if (!shotsMap[shotRaw] || shotsMap[shotRaw].version < version) {
+        shotsMap[shotRaw] = { version, path, fileName: filename };
+      }
+    }
 
-let shot = folder.name
+    // rootList may contain files or folders. Distinguish by simple heuristic:
+    // if entry.name has extension -> treat as file at root, else treat as folder and list inside.
+    for (const entry of rootList) {
+      const name = entry.name || entry;
+      if (name.match(/\.(mov|mp4|m4v)$/i)) {
+        // file at root
+        processFilePath(name);
+      } else {
+        // try list inside folder
+        const { data: innerList, error: e2 } = await supabase.storage.from(bucketName).list(name, { limit: 1000 });
+        if (e2) {
+          // fallback: maybe it's a file-like entry; try process as file name
+          processFilePath(name);
+        } else {
+          for (const f of innerList) {
+            // each f.name is filename inside folder
+            processFilePath(`${name}/${f.name}`);
+          }
+        }
+      }
+    }
 
-div.innerHTML += `<h3>Shot ${shot}</h3>`
+    // If no shots found:
+    const keys = Object.keys(shotsMap).sort();
+    if (keys.length === 0) {
+      emptyHint.textContent = "Nenhum shot encontrado no bucket. Faça um upload para começar.";
+      return;
+    } else {
+      emptyHint.textContent = "";
+    }
 
-let video = document.createElement("video")
+    // Render shots (sorted)
+    for (const shotKey of keys) {
+      const info = shotsMap[shotKey];
+      // build public URL: /storage/v1/object/public/<bucket>/<path>
+      // path may contain folder, so split and encode components
+      const parts = info.path.split("/");
+      const encodedParts = parts.map(p => encodeURIComponent(p));
+      const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/${bucketName}/${encodedParts.join("/")}`;
 
-video.src = url
-video.controls = true
-video.width = 400
+      const wrap = document.createElement("div");
+      wrap.className = "shot";
 
-div.appendChild(video)
+      const title = document.createElement("h3");
+      title.textContent = `${shotKey} — v${info.version.toString().padStart(3,"0")}`;
+      wrap.appendChild(title);
 
+      const vid = document.createElement("video");
+      vid.src = publicUrl;
+      vid.controls = true;
+      vid.setAttribute("playsinline", "");
+      vid.setAttribute("preload", "none");
+      wrap.appendChild(vid);
+
+      shotsContainer.appendChild(wrap);
+    }
+
+  } catch (err) {
+    console.error("Erro loadShots:", err);
+    emptyHint.textContent = "Erro inesperado ao carregar arquivos.";
+  }
 }
 
-}
-
-}
-
-loadShots()
+// inicializa
+loadShots();
 
 </script>
-
 </body>
 </html>
