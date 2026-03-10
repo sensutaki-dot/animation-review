@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8" />
-  <title>Animation Review — Play Scene + Anotações</title>
+  <title>Animation Review — Frame Annotations & Time Comments</title>
 
   <!-- Supabase v2 UMD -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
@@ -16,7 +16,7 @@
     label{display:block;margin-bottom:8px}
     input[type=file]{display:block;margin-bottom:12px}
     button{background:#1f6feb;border:none;color:white;padding:8px 12px;border-radius:8px;cursor:pointer;margin-right:8px}
-    button:active{transform:translateY(1px)}
+    button.small{padding:6px 8px}
     .hint{color:#9fb0d6;font-size:13px;margin-top:8px}
     .shots{display:flex;flex-wrap:wrap;gap:12px;margin-top:12px}
     .shot{background:#071027;border-radius:8px;padding:12px;width:calc(50% - 12px);box-sizing:border-box}
@@ -29,13 +29,15 @@
     .sceneCanvasWrap{position:relative; display:inline-block; max-width:100%;}
     canvas{position:absolute; left:0; top:0; pointer-events:none}
     .drawControls{margin-top:8px; display:flex; gap:8px; align-items:center; flex-wrap:wrap}
-    .small { padding:6px 8px }
+    .comments{margin-top:10px; max-height:220px; overflow:auto; background:#041226; padding:8px; border-radius:6px}
+    .comment{padding:6px;border-bottom:1px solid rgba(255,255,255,0.03); font-size:14px}
+    .comment time{color:#9fb0d6; font-size:12px; margin-right:8px}
     @media (max-width:700px){ .shot{width:100%} }
   </style>
 </head>
 <body>
   <div class="wrap">
-    <h1>Animation Review — Upload, Play Scene & Anotações</h1>
+    <h1>Animation Review — Frame Annotations & Comments</h1>
 
     <div class="card">
       <label for="fileInput"><strong>1) Selecione o playblast (.mov / .mp4)</strong></label>
@@ -55,7 +57,7 @@
       <div id="emptyHint" class="hint"></div>
 
       <div class="card" style="margin-top:12px;background:#07122a">
-        <strong>Scene Player & Anotações</strong>
+        <strong>Scene Player, Frame Annotations & Time Comments</strong>
         <div id="sceneArea" style="margin-top:10px">
 
           <div class="sceneControls">
@@ -66,7 +68,8 @@
 
             <button id="toggleDraw" class="small">Draw</button>
             <button id="clearDraw" class="small">Clear</button>
-            <button id="saveDraw" class="small">Save Annotation</button>
+            <button id="saveFrame" class="small">Save Frame Annotation</button>
+            <button id="saveFull" class="small">Save Full Annotation</button>
             <button id="toggleOverlay" class="small">Toggle Overlay</button>
 
             <label style="margin-left:8px">Color: <input id="colorPicker" type="color" value="#ff2b2b" /></label>
@@ -76,7 +79,17 @@
           </div>
 
           <div class="playerWrap" id="scenePlayerWrap" style="margin-top:10px">
-            <!-- video + canvas will be injected here -->
+            <!-- video + canvas injected here -->
+          </div>
+
+          <div style="margin-top:10px;">
+            <label><strong>Add comment at current time</strong></label>
+            <div style="display:flex; gap:8px; align-items:center; margin-top:6px;">
+              <input id="commentInput" placeholder="Escreva seu comentário..." style="flex:1; padding:8px; border-radius:6px; border:1px solid #23314b; background:#07122a; color:white">
+              <button id="addComment" class="small">Add Comment at time</button>
+            </div>
+
+            <div class="comments" id="commentsList" aria-live="polite"></div>
           </div>
 
         </div>
@@ -93,10 +106,9 @@ const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 
 const { createClient } = window.supabase;
 const client = createClient(SUPABASE_URL, SUPABASE_KEY);
-
 const bucketName = "videos";
 
-/* --- DOM --- */
+/* DOM */
 const btnUpload = document.getElementById("btnUpload");
 const btnPlayScene = document.getElementById("btnPlayScene");
 const btnStopScene = document.getElementById("btnStopScene");
@@ -104,24 +116,35 @@ const fileInput = document.getElementById("fileInput");
 const statusEl = document.getElementById("status");
 const shotsContainer = document.getElementById("shots");
 const emptyHint = document.getElementById("emptyHint");
-
 const scenePlayerWrap = document.getElementById("scenePlayerWrap");
 const currentShotLabel = document.getElementById("currentShotLabel");
 const btnScenePrev = document.getElementById("scenePrev");
 const btnScenePlay = document.getElementById("scenePlay");
 const btnScenePause = document.getElementById("scenePause");
 const btnSceneNext = document.getElementById("sceneNext");
-
 const btnToggleDraw = document.getElementById("toggleDraw");
 const btnClearDraw = document.getElementById("clearDraw");
-const btnSaveDraw = document.getElementById("saveDraw");
+const btnSaveFrame = document.getElementById("saveFrame");
+const btnSaveFull = document.getElementById("saveFull");
 const btnToggleOverlay = document.getElementById("toggleOverlay");
 const colorPicker = document.getElementById("colorPicker");
 const brushSize = document.getElementById("brushSize");
+const commentInput = document.getElementById("commentInput");
+const addCommentBtn = document.getElementById("addComment");
+const commentsList = document.getElementById("commentsList");
 
 let latestShotsMap = {}; // { SH07: {version, path, fileName} }
+let scenePlaylist = [];
+let sceneIndex = 0;
+let sceneVideoEl = null;
+let overlayCanvas = null;
+let overlayCtx = null;
+let drawActive = false;
+let overlayVisible = true;
+let currentAnnotationShot = null;
+let currentAnnotationVersion = null;
 
-/* ---------- Upload ---------- */
+/* ---------- Upload (same as before) ---------- */
 btnUpload.addEventListener("click", async () => {
   const f = fileInput.files[0];
   if (!f) { alert("Selecione um arquivo antes."); return; }
@@ -143,12 +166,7 @@ btnUpload.addEventListener("click", async () => {
 
   try {
     const { data, error } = await client.storage.from(bucketName).upload(destPath, f, { upsert: true });
-    if (error) {
-      console.error("Upload error:", error);
-      alert("Erro no upload: " + (error.message || JSON.stringify(error)));
-      statusEl.textContent = "";
-      return;
-    }
+    if (error) { console.error("Upload error:", error); alert("Erro no upload: "+(error.message||JSON.stringify(error))); statusEl.textContent=""; return; }
     statusEl.textContent = `Upload concluído: ${shotRaw} v${versionNum.toString().padStart(3,"0")}`;
     fileInput.value = "";
     await loadShots();
@@ -159,16 +177,14 @@ btnUpload.addEventListener("click", async () => {
   }
 });
 
-/* ---------- Listing & latest map ---------- */
+/* ---------- Listing & latest map (same as before) ---------- */
 async function loadShots(){
   shotsContainer.innerHTML = "";
   emptyHint.textContent = "Carregando...";
   try {
     const { data: rootList, error: errRoot } = await client.storage.from(bucketName).list("", { limit: 1000 });
     if (errRoot) { console.error(errRoot); emptyHint.textContent = "Erro ao listar arquivos."; return; }
-
     const shotsMap = {};
-
     function processFilePath(path) {
       const filename = path.split("/").pop();
       const shotMatch = filename.match(/(sh[_-]?\d+)/i) || (path.match(/^(sh[_-]?\d+)/i));
@@ -180,65 +196,41 @@ async function loadShots(){
         shotsMap[shotRaw] = { version, path, fileName: filename };
       }
     }
-
     for (const entry of rootList) {
       const name = entry.name || entry;
-      if (name.match(/\.(mov|mp4|m4v)$/i)) {
-        processFilePath(name);
-      } else {
+      if (name.match(/\.(mov|mp4|m4v)$/i)) processFilePath(name);
+      else {
         const { data: innerList, error: e2 } = await client.storage.from(bucketName).list(name, { limit: 1000 });
-        if (e2) processFilePath(name);
-        else for (const f of innerList) processFilePath(`${name}/${f.name}`);
+        if (e2) processFilePath(name); else for (const f of innerList) processFilePath(`${name}/${f.name}`);
       }
     }
-
     latestShotsMap = shotsMap;
     const keys = Object.keys(shotsMap).sort((a,b)=>parseInt(a.replace(/[^0-9]/g,''),10) - parseInt(b.replace(/[^0-9]/g,''),10));
     if (keys.length === 0) { emptyHint.textContent = "Nenhum shot encontrado."; latestShotsMap = {}; return; }
     emptyHint.textContent = "";
-
-    // render
+    shotsContainer.innerHTML = "";
     for (const shotKey of keys) {
       const info = shotsMap[shotKey];
       const parts = info.path.split("/");
       const encodedParts = parts.map(p=>encodeURIComponent(p));
       const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/${bucketName}/${encodedParts.join("/")}`;
-
       const wrap = document.createElement("div");
       wrap.className = "shot";
-
       const title = document.createElement("h3");
       title.textContent = `${shotKey} — v${info.version.toString().padStart(3,"0")}`;
       wrap.appendChild(title);
-
       const vid = document.createElement("video");
       vid.src = publicUrl;
       vid.controls = true;
       vid.setAttribute("playsinline","");
       vid.setAttribute("preload","none");
       wrap.appendChild(vid);
-
       shotsContainer.appendChild(wrap);
     }
-
-  } catch (err) {
-    console.error("Erro loadShots:", err);
-    emptyHint.textContent = "Erro inesperado ao carregar arquivos.";
-  }
+  } catch (err) { console.error("Erro loadShots:", err); emptyHint.textContent = "Erro inesperado ao carregar arquivos."; }
 }
 
-/* ---------- Scene player & Annotations overlay ---------- */
-let scenePlaylist = [];
-let sceneIndex = 0;
-let sceneVideoEl = null;
-let overlayCanvas = null;
-let overlayCtx = null;
-let isDrawing = false;
-let drawActive = false; // drawing mode enabled/disabled
-let overlayVisible = true;
-let currentAnnotationShot = null; // "SH07"
-let currentAnnotationVersion = null; // number
-
+/* ---------- Scene player & overlay (like previous) ---------- */
 function buildPlaylistFromLatestShots(){
   const keys = Object.keys(latestShotsMap).sort((a,b)=>parseInt(a.replace(/[^0-9]/g,''),10)-parseInt(b.replace(/[^0-9]/g,''),10));
   const list = [];
@@ -253,7 +245,6 @@ function buildPlaylistFromLatestShots(){
 }
 
 function createScenePlayerWithOverlay(){
-  // if exists, clear and recreate wrapper
   scenePlayerWrap.innerHTML = "";
   sceneVideoEl = document.createElement("video");
   sceneVideoEl.controls = true;
@@ -262,52 +253,38 @@ function createScenePlayerWithOverlay(){
   sceneVideoEl.setAttribute("playsinline","");
   sceneVideoEl.setAttribute("preload","auto");
 
-  // wrapper for positioning
   const wrap = document.createElement("div");
   wrap.className = "sceneCanvasWrap";
-  wrap.style.maxWidth = "100%";
-  wrap.style.display = "inline-block";
   wrap.style.position = "relative";
 
-  // canvas
   overlayCanvas = document.createElement("canvas");
   overlayCanvas.style.position = "absolute";
   overlayCanvas.style.left = "0";
   overlayCanvas.style.top = "0";
-  overlayCanvas.style.pointerEvents = "auto"; // to receive pointer events when drawActive true
-  overlayCanvas.width = 640;
-  overlayCanvas.height = 360;
-  overlayCanvas.style.width = "100%";
-  overlayCanvas.style.height = "100%";
+  overlayCanvas.style.pointerEvents = "none";
   overlayCanvas.style.zIndex = 2;
 
   overlayCtx = overlayCanvas.getContext("2d");
   overlayCtx.lineCap = "round";
 
-  // add elements
   wrap.appendChild(sceneVideoEl);
   wrap.appendChild(overlayCanvas);
   scenePlayerWrap.appendChild(wrap);
 
-  // events: keep canvas size synced to video display size
   function resizeCanvasToVideo(){
-    const vw = sceneVideoEl.clientWidth;
-    const vh = sceneVideoEl.clientHeight;
-    overlayCanvas.style.width = vw + "px";
-    overlayCanvas.style.height = vh + "px";
-    // set internal pixel size to video resolution while preserving aspect
-    const ratio = sceneVideoEl.videoWidth && sceneVideoEl.videoHeight ? (sceneVideoEl.videoWidth / sceneVideoEl.clientWidth) : 1;
     const canvasW = Math.max(1, Math.round(sceneVideoEl.clientWidth));
     const canvasH = Math.max(1, Math.round(sceneVideoEl.clientHeight));
     overlayCanvas.width = canvasW;
     overlayCanvas.height = canvasH;
-    // when resizing, we do not clear previous drawing (we leave pixel scale)
+    overlayCanvas.style.width = canvasW + "px";
+    overlayCanvas.style.height = canvasH + "px";
   }
 
   sceneVideoEl.addEventListener("loadedmetadata", resizeCanvasToVideo);
   window.addEventListener("resize", resizeCanvasToVideo);
 
   // pointer drawing
+  let isDrawing = false;
   let lastX = 0, lastY = 0;
 
   overlayCanvas.addEventListener("pointerdown", (e) => {
@@ -341,69 +318,142 @@ function createScenePlayerWithOverlay(){
 
   overlayCanvas.addEventListener("pointercancel", ()=> { isDrawing = false; });
 
-  // when video ends, advance
-  sceneVideoEl.addEventListener("ended", () => {
-    sceneNext();
-  });
+  sceneVideoEl.addEventListener("ended", () => sceneNext());
 
   return sceneVideoEl;
 }
 
-/* ---------- Annotation save/load ---------- */
-async function saveCurrentAnnotation(){
-  if (!currentAnnotationShot || currentAnnotationVersion == null) { alert("Nenhum shot ativo para salvar anotação."); return; }
-  // convert canvas to blob
+/* ---------- Frame annotation saving / loading ---------- */
+async function saveFrameAnnotation(){
+  if (!currentAnnotationShot || currentAnnotationVersion == null) { alert("Nenhum shot ativo."); return; }
   if (!overlayCanvas) { alert("Crie o player primeiro (Play Scene)."); return; }
-  const blob = await new Promise(res => overlayCanvas.toBlob(res, "image/png"));
-  if (!blob) { alert("Falha ao gerar imagem."); return; }
-
-  const remotePath = `annotations/${currentAnnotationShot}/${currentAnnotationShot}_v${String(currentAnnotationVersion).padStart(3,"0")}.png`;
   try {
+    const ms = Math.round(sceneVideoEl.currentTime * 1000);
+    const blob = await new Promise(res => overlayCanvas.toBlob(res, "image/png"));
+    const remotePath = `annotations/${currentAnnotationShot}/frames/${currentAnnotationShot}_v${String(currentAnnotationVersion).padStart(3,"0")}_t${ms}.png`;
     const { data, error } = await client.storage.from(bucketName).upload(remotePath, blob, { upsert: true });
-    if (error) { console.error("Save annotation error:", error); alert("Erro ao salvar anotação: " + (error.message||JSON.stringify(error))); return; }
-    alert("Anotação salva.");
-    // no need to reload list
-  } catch (e) {
-    console.error(e);
-    alert("Erro inesperado ao salvar anotação.");
-  }
+    if (error) { console.error("saveFrame error", error); alert("Erro ao salvar anotação de frame: " + (error.message||JSON.stringify(error))); return; }
+    alert("Anotação do frame salva.");
+    // after save, reload comments/list if needed
+  } catch (e) { console.error(e); alert("Erro ao salvar anotação."); }
 }
 
-async function loadAnnotationFor(shot, version){
-  // clear canvas first
+async function loadClosestFrameAnnotation(shot, version){
   if (!overlayCanvas || !overlayCtx) return;
+  // clear canvas
   overlayCtx.clearRect(0,0,overlayCanvas.width, overlayCanvas.height);
 
-  const fileName = `${shot}_v${String(version).padStart(3,"0")}.png`;
-  const path = `annotations/${shot}/${fileName}`;
-  const url = `${SUPABASE_URL}/storage/v1/object/public/${bucketName}/${encodeURIComponent(path)}`;
-
-  // attempt to load image
+  // list files in annotations/<shot>/frames
   try {
+    const listPath = `annotations/${shot}/frames`;
+    const { data: files, error } = await client.storage.from(bucketName).list(listPath, { limit: 1000 });
+    if (error || !files || files.length===0) return;
+    // compute current ms
+    const nowMs = Math.round(sceneVideoEl.currentTime * 1000);
+    // find matching files with pattern ..._v###_t{ms}.png
+    let best = null;
+    for (const f of files){
+      const m = f.name.match(new RegExp(`${shot}_v0*${String(version)}_t(\\d+)\\.png`));
+      if (m) {
+        const fileMs = parseInt(m[1],10);
+        const diff = Math.abs(fileMs - nowMs);
+        if (!best || diff < best.diff) best = {file: f.name, diff, ms: fileMs};
+      }
+    }
+    if (!best) return;
+    const path = `${listPath}/${best.file}`;
+    const url = `${SUPABASE_URL}/storage/v1/object/public/${bucketName}/${encodeURIComponent(path)}`;
     const img = new Image();
     img.crossOrigin = "anonymous";
     img.onload = function(){
-      // resize canvas to match current display
-      const rect = overlayCanvas.getBoundingClientRect();
+      // resize canvas to display size
       overlayCanvas.width = overlayCanvas.clientWidth;
       overlayCanvas.height = overlayCanvas.clientHeight;
-      // draw image scaled to canvas
+      overlayCtx.clearRect(0,0,overlayCanvas.width, overlayCanvas.height);
       overlayCtx.drawImage(img, 0, 0, overlayCanvas.width, overlayCanvas.height);
     };
-    img.onerror = function(){
-      // no saved annotation — nothing to load
-    };
+    img.onerror = ()=>{};
     img.src = url;
-  } catch(e){
-    console.error("loadAnnotation error", e);
+  } catch (e) { console.error("loadClosestFrameAnnotation", e); }
+}
+
+/* ---------- Full annotation save (as before) ---------- */
+async function saveFullAnnotation(){
+  if (!currentAnnotationShot || currentAnnotationVersion == null) { alert("Nenhum shot ativo."); return; }
+  if (!overlayCanvas) { alert("Crie o player primeiro (Play Scene)."); return; }
+  try {
+    const blob = await new Promise(res => overlayCanvas.toBlob(res, "image/png"));
+    const remotePath = `annotations/${currentAnnotationShot}/${currentAnnotationShot}_v${String(currentAnnotationVersion).padStart(3,"0")}.png`;
+    const { data, error } = await client.storage.from(bucketName).upload(remotePath, blob, { upsert: true });
+    if (error) { console.error("saveFull error", error); alert("Erro ao salvar anotação: " + (error.message||JSON.stringify(error))); return; }
+    alert("Anotação salva (full).");
+  } catch (e) { console.error(e); alert("Erro ao salvar anotação."); }
+}
+
+/* ---------- Comments (per-shot JSON) ---------- */
+async function loadCommentsFor(shot){
+  commentsList.innerHTML = "Carregando comentários...";
+  const path = `annotations/${shot}/${shot}_comments.json`;
+  try {
+    const { data, error } = await client.storage.from(bucketName).download(path);
+    if (error) { commentsList.innerHTML = "<i>Nenhum comentário.</i>"; return []; }
+    const text = await data.text();
+    const arr = JSON.parse(text || "[]");
+    renderComments(arr);
+    return arr;
+  } catch (e) { console.error("loadCommentsFor", e); commentsList.innerHTML = "<i>Erro carregando comentários</i>"; return []; }
+}
+
+function renderComments(arr){
+  if (!arr || arr.length===0) { commentsList.innerHTML = "<i>Nenhum comentário.</i>"; return; }
+  // sort by time
+  arr.sort((a,b)=>a.time_ms - b.time_ms);
+  commentsList.innerHTML = "";
+  for (const c of arr) {
+    const div = document.createElement("div");
+    div.className = "comment";
+    const timeStr = new Date(c.created_at).toLocaleString();
+    const seconds = (c.time_ms/1000).toFixed(2);
+    div.innerHTML = `<time>${seconds}s — ${timeStr}</time><div>${escapeHtml(c.text)}</div>`;
+    div.style.cursor = "pointer";
+    div.addEventListener("click", ()=> {
+      // seek to time
+      if (sceneVideoEl) {
+        sceneVideoEl.currentTime = c.time_ms/1000;
+        sceneVideoEl.play().catch(()=>{});
+      }
+    });
+    commentsList.appendChild(div);
   }
 }
 
-/* ---------- Scene control functions ---------- */
-function createOrGetSceneVideo(){
-  if (sceneVideoEl) return sceneVideoEl;
-  return createScenePlayerWithOverlay();
+function escapeHtml(s){ return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+
+async function addCommentAtCurrentTime(){
+  if (!currentAnnotationShot) { alert("Nenhum shot ativo."); return; }
+  const text = commentInput.value.trim();
+  if (!text) { alert("Digite um comentário."); return; }
+  const path = `annotations/${currentAnnotationShot}/${currentAnnotationShot}_comments.json`;
+  try {
+    // read existing
+    let existing = [];
+    const { data: dl, error: de } = await client.storage.from(bucketName).download(path);
+    if (!de) {
+      const t = await dl.text();
+      existing = JSON.parse(t || "[]");
+    }
+    const obj = { time_ms: Math.round(sceneVideoEl.currentTime*1000), text, created_at: new Date().toISOString() };
+    existing.push(obj);
+    const blob = new Blob([JSON.stringify(existing, null, 2)], { type: "application/json" });
+    const { data, error } = await client.storage.from(bucketName).upload(path, blob, { upsert: true });
+    if (error) { console.error("save comment error", error); alert("Erro ao salvar comentário: "+(error.message||JSON.stringify(error))); return; }
+    commentInput.value = "";
+    await loadCommentsFor(currentAnnotationShot);
+  } catch (e) { console.error("addCommentAtCurrentTime", e); alert("Erro ao salvar comentário."); }
 }
+
+/* ---------- Scene functions (play/next/prev etc) ---------- */
+function createOrGetSceneVideo(){ if (sceneVideoEl) return sceneVideoEl; return createScenePlayerWithOverlay(); }
 
 async function playSceneFrom(index=0){
   if (!latestShotsMap || Object.keys(latestShotsMap).length === 0) { alert("Não há shots para tocar."); return; }
@@ -411,57 +461,47 @@ async function playSceneFrom(index=0){
   if (scenePlaylist.length === 0) { alert("Playlist vazia."); return; }
   sceneIndex = Math.max(0, Math.min(index, scenePlaylist.length-1));
   const item = scenePlaylist[sceneIndex];
-
   const vid = createOrGetSceneVideo();
-  // set current shot/version context for annotation saves/loads
   currentAnnotationShot = item.shot;
   currentAnnotationVersion = item.version;
-
-  // load annotation (async)
-  loadAnnotationFor(currentAnnotationShot, currentAnnotationVersion);
-
+  // load frame annotation closest
+  await loadCommentsFor(currentAnnotationShot);
+  await loadClosestFrameAnnotation(currentAnnotationShot, currentAnnotationVersion);
   vid.src = item.url;
   currentShotLabel.textContent = `${item.shot} (${sceneIndex+1}/${scenePlaylist.length})`;
   try { await vid.play(); } catch(e) { console.warn("autoplay blocked", e); }
 }
 
 function scenePause(){ if (sceneVideoEl) sceneVideoEl.pause(); }
-
 function sceneNext(){
   if (!scenePlaylist || scenePlaylist.length === 0) return;
   sceneIndex = Math.min(sceneIndex+1, scenePlaylist.length-1);
   const item = scenePlaylist[sceneIndex];
   currentAnnotationShot = item.shot;
   currentAnnotationVersion = item.version;
-  loadAnnotationFor(currentAnnotationShot, currentAnnotationVersion);
+  loadCommentsFor(currentAnnotationShot);
+  loadClosestFrameAnnotation(currentAnnotationShot, currentAnnotationVersion);
   if (!sceneVideoEl) createOrGetSceneVideo();
   sceneVideoEl.src = item.url;
   currentShotLabel.textContent = `${item.shot} (${sceneIndex+1}/${scenePlaylist.length})`;
   sceneVideoEl.play().catch(()=>{});
 }
-
 function scenePrev(){
   if (!scenePlaylist || scenePlaylist.length === 0) return;
   sceneIndex = Math.max(sceneIndex-1, 0);
   const item = scenePlaylist[sceneIndex];
   currentAnnotationShot = item.shot;
   currentAnnotationVersion = item.version;
-  loadAnnotationFor(currentAnnotationShot, currentAnnotationVersion);
+  loadCommentsFor(currentAnnotationShot);
+  loadClosestFrameAnnotation(currentAnnotationShot, currentAnnotationVersion);
   if (!sceneVideoEl) createOrGetSceneVideo();
   sceneVideoEl.src = item.url;
   currentShotLabel.textContent = `${item.shot} (${sceneIndex+1}/${scenePlaylist.length})`;
   sceneVideoEl.play().catch(()=>{});
 }
-
 function stopScene(){
-  if (sceneVideoEl) {
-    sceneVideoEl.pause();
-    sceneVideoEl.currentTime = 0;
-    sceneVideoEl.src = "";
-  }
-  scenePlaylist = [];
-  sceneIndex = 0;
-  currentShotLabel.textContent = "";
+  if (sceneVideoEl) { sceneVideoEl.pause(); sceneVideoEl.currentTime=0; sceneVideoEl.src=""; }
+  scenePlaylist=[]; sceneIndex=0; currentShotLabel.textContent="";
 }
 
 /* ---------- Draw UI handlers ---------- */
@@ -471,37 +511,19 @@ btnToggleDraw.addEventListener("click", ()=> {
   overlayCanvas.style.pointerEvents = drawActive ? "auto" : "none";
   btnToggleDraw.textContent = drawActive ? "Drawing: ON" : "Draw";
 });
+btnClearDraw.addEventListener("click", ()=> { if (!overlayCtx) return; overlayCtx.clearRect(0,0,overlayCanvas.width, overlayCanvas.height); });
+btnSaveFrame.addEventListener("click", ()=> saveFrameAnnotation());
+btnSaveFull.addEventListener("click", ()=> saveFullAnnotation());
+btnToggleOverlay.addEventListener("click", ()=> { overlayVisible = !overlayVisible; if (overlayCanvas) overlayCanvas.style.display = overlayVisible ? "block" : "none"; btnToggleOverlay.textContent = overlayVisible ? "Toggle Overlay" : "Overlay Hidden"; });
 
-btnClearDraw.addEventListener("click", ()=> {
-  if (!overlayCtx) return;
-  overlayCtx.clearRect(0,0,overlayCanvas.width, overlayCanvas.height);
-});
-
-btnSaveDraw.addEventListener("click", async ()=>{
-  // save annotation for current shot/version
-  if (!currentAnnotationShot) { alert("Nenhum shot ativo para salvar."); return; }
-  await saveCurrentAnnotation();
-});
-
-btnToggleOverlay.addEventListener("click", ()=>{
-  overlayVisible = !overlayVisible;
-  if (overlayCanvas) overlayCanvas.style.display = overlayVisible ? "block" : "none";
-  btnToggleOverlay.textContent = overlayVisible ? "Toggle Overlay" : "Overlay Hidden";
-});
-
-/* ---------- UI bindings ---------- */
-btnPlayScene.addEventListener("click", async ()=>{
-  await loadShots();
-  playSceneFrom(0);
-});
-btnStopScene.addEventListener("click", ()=> stopScene());
+btnScenePlay.addEventListener("click", async ()=> { if (!sceneVideoEl) { await loadShots(); playSceneFrom(sceneIndex || 0); } else sceneVideoEl.play().catch(()=>{}); });
+btnScenePause.addEventListener("click", ()=> scenePause());
 btnSceneNext.addEventListener("click", ()=> sceneNext());
 btnScenePrev.addEventListener("click", ()=> scenePrev());
-btnScenePlay.addEventListener("click", async ()=> {
-  if (!sceneVideoEl) { await loadShots(); playSceneFrom(sceneIndex || 0); }
-  else sceneVideoEl.play().catch(()=>{});
-});
-btnScenePause.addEventListener("click", ()=> scenePause());
+btnPlayScene.addEventListener("click", async ()=> { await loadShots(); playSceneFrom(0); });
+btnStopScene.addEventListener("click", ()=> stopScene());
+
+addCommentBtn.addEventListener("click", ()=> addCommentAtCurrentTime());
 
 /* ---------- Init ---------- */
 loadShots();
