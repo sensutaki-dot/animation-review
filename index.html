@@ -2,10 +2,10 @@
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8" />
-  <title>Animation Review - Supabase</title>
+  <title>Animation Review - Supabase (corrigido)</title>
 
-  <!-- Supabase client -->
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <!-- Supabase v2 UMD -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <style>
@@ -53,7 +53,8 @@ const SUPABASE_URL = "https://qdnmeuxojubkijpcesry.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFkbm1ldXhvanVia2lqcGNlc3J5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMxNzM2NTAsImV4cCI6MjA4ODc0OTY1MH0.UBnWHTKw3Pw2pMgRHvpReg7sLMHwvGm5EU2kqq8990A";
 /* ========================================================================== */
 
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const { createClient } = window.supabase;
+const client = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const bucketName = "videos";
 const btnUpload = document.getElementById("btnUpload");
@@ -82,7 +83,7 @@ btnUpload.addEventListener("click", async () => {
   }
 
   // normaliza o nome da pasta do shot: exemplo 'sh_07' -> 'SH07'
-  const shotRaw = shotMatch[1].toUpperCase().replace("_",""); // SH07 or SH010
+  const shotRaw = shotMatch[1].toUpperCase().replace(/[_-]/g,""); // SH07 or SH010
   const versionNum = parseInt(versionMatch[1], 10);
 
   // path onde vai salvar: <shotRaw>/<filename>
@@ -90,7 +91,7 @@ btnUpload.addEventListener("click", async () => {
 
   try {
     // upsert true para sobrescrever se já existir com mesmo caminho
-    const { data, error } = await supabase.storage.from(bucketName).upload(destPath, f, { upsert: true });
+    const { data, error } = await client.storage.from(bucketName).upload(destPath, f, { upsert: true });
 
     if (error) {
       console.error("Upload error:", error);
@@ -120,7 +121,7 @@ async function loadShots(){
 
   try {
     // lista entradas no root
-    const { data: rootList, error: errRoot } = await supabase.storage.from(bucketName).list("", { limit: 1000 });
+    const { data: rootList, error: errRoot } = await client.storage.from(bucketName).list("", { limit: 1000 });
 
     if (errRoot) {
       console.error("Erro list root:", errRoot);
@@ -140,7 +141,7 @@ async function loadShots(){
 
       if (!shotMatch || !versionMatch) return;
 
-      const shotRaw = shotMatch[1].toUpperCase().replace("_", ""); // e.g. "SH07" or "SH010"
+      const shotRaw = shotMatch[1].toUpperCase().replace(/[_-]/g, ""); // e.g. "SH07" or "SH010"
       const version = parseInt(versionMatch[1], 10);
 
       // if not present or found higher version, replace
@@ -158,13 +159,13 @@ async function loadShots(){
         processFilePath(name);
       } else {
         // try list inside folder
-        const { data: innerList, error: e2 } = await supabase.storage.from(bucketName).list(name, { limit: 1000 });
+        const { data: innerList, error: e2 } = await client.storage.from(bucketName).list(name, { limit: 1000 });
         if (e2) {
           // fallback: maybe it's a file-like entry; try process as file name
           processFilePath(name);
         } else {
           for (const f of innerList) {
-            // each f.name is filename inside folder
+            // f.name is filename inside folder
             processFilePath(`${name}/${f.name}`);
           }
         }
@@ -172,7 +173,12 @@ async function loadShots(){
     }
 
     // If no shots found:
-    const keys = Object.keys(shotsMap).sort();
+    const keys = Object.keys(shotsMap).sort((a,b)=>{
+      // sort numeric after removing "SH"
+      const na = parseInt(a.replace(/[^0-9]/g,''),10);
+      const nb = parseInt(b.replace(/[^0-9]/g,''),10);
+      return na - nb;
+    });
     if (keys.length === 0) {
       emptyHint.textContent = "Nenhum shot encontrado no bucket. Faça um upload para começar.";
       return;
@@ -184,7 +190,6 @@ async function loadShots(){
     for (const shotKey of keys) {
       const info = shotsMap[shotKey];
       // build public URL: /storage/v1/object/public/<bucket>/<path>
-      // path may contain folder, so split and encode components
       const parts = info.path.split("/");
       const encodedParts = parts.map(p => encodeURIComponent(p));
       const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/${bucketName}/${encodedParts.join("/")}`;
