@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8" />
-  <title>Animation Review - Supabase (corrigido)</title>
+  <title>Animation Review — Play Scene</title>
 
   <!-- Supabase v2 UMD -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
@@ -15,7 +15,7 @@
     .card{background:#0b1220;border-radius:10px;padding:16px;margin-bottom:18px;box-shadow:0 6px 24px rgba(2,6,23,0.6)}
     label{display:block;margin-bottom:8px}
     input[type=file]{display:block;margin-bottom:12px}
-    button{background:#1f6feb;border:none;color:white;padding:8px 14px;border-radius:8px;cursor:pointer}
+    button{background:#1f6feb;border:none;color:white;padding:8px 14px;border-radius:8px;cursor:pointer;margin-right:8px}
     button:active{transform:translateY(1px)}
     .hint{color:#9fb0d6;font-size:13px;margin-top:8px}
     .shots{display:flex;flex-wrap:wrap;gap:14px;margin-top:12px}
@@ -23,18 +23,22 @@
     .shot h3{margin:0 0 8px 0;font-size:14px}
     video{width:100%;border-radius:6px;background:black}
     .status{margin-top:8px;color:#9fb0d6;font-size:13px}
+    .sceneControls{display:flex;gap:8px;align-items:center;margin-top:12px}
+    .currentShot{font-weight:600;margin-left:8px}
     @media (max-width:700px){ .shot{width:100%} }
   </style>
 </head>
 <body>
   <div class="wrap">
-    <h1>Animation Review — Upload & Scene</h1>
+    <h1>Animation Review — Upload & Play Scene</h1>
 
     <div class="card">
       <label for="fileInput"><strong>1) Selecione o playblast (.mov / .mp4)</strong></label>
       <input id="fileInput" type="file" accept="video/*" />
-      <div>
+      <div style="margin-top:8px;">
         <button id="btnUpload">Upload</button>
+        <button id="btnPlayScene">Play Scene</button>
+        <button id="btnStopScene">Stop Scene</button>
       </div>
       <div class="hint">Nomeie seus arquivos com padrão como <code>sh_07_v008.mov</code> ou <code>SH010_v003.mov</code> — o sistema detecta shot e versão automaticamente.</div>
       <div id="status" class="status"></div>
@@ -44,6 +48,22 @@
       <strong>2) Cena — últimas versões de cada shot</strong>
       <div id="shots" class="shots"></div>
       <div id="emptyHint" class="hint"></div>
+
+      <div class="card" style="margin-top:12px;background:#07122a">
+        <strong>Scene Player</strong>
+        <div id="sceneArea" style="margin-top:8px">
+          <!-- player injetado aqui -->
+          <div class="sceneControls" style="margin-bottom:8px">
+            <button id="scenePrev">◀ Prev</button>
+            <button id="scenePlay">▶ Play</button>
+            <button id="scenePause">⏸ Pause</button>
+            <button id="sceneNext">Next ▶</button>
+            <span class="currentShot" id="currentShotLabel"></span>
+          </div>
+          <div id="scenePlayerWrap"></div>
+        </div>
+      </div>
+
     </div>
   </div>
 
@@ -58,10 +78,14 @@ const client = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const bucketName = "videos";
 const btnUpload = document.getElementById("btnUpload");
+const btnPlayScene = document.getElementById("btnPlayScene");
+const btnStopScene = document.getElementById("btnStopScene");
 const fileInput = document.getElementById("fileInput");
 const statusEl = document.getElementById("status");
 const shotsContainer = document.getElementById("shots");
 const emptyHint = document.getElementById("emptyHint");
+
+let latestShotsMap = {}; // global com o resultado mais recente de loadShots()
 
 btnUpload.addEventListener("click", async () => {
   const f = fileInput.files[0];
@@ -71,7 +95,6 @@ btnUpload.addEventListener("click", async () => {
 
   // Detect shot and version from filename (flexível com underscore/maiúsculas)
   const name = f.name;
-  // busca padrão tipo sh_07 ou SH07 ou SH010
   const shotMatch = name.match(/(sh[_-]?\d+)/i);
   const versionMatch = name.match(/_v0*(\d+)/i) || name.match(/v0*(\d+)/i);
 
@@ -82,7 +105,7 @@ btnUpload.addEventListener("click", async () => {
     return;
   }
 
-  // normaliza o nome da pasta do shot: exemplo 'sh_07' -> 'SH07'
+  // normaliza a pasta do shot: exemplo 'sh_07' -> 'SH07'
   const shotRaw = shotMatch[1].toUpperCase().replace(/[_-]/g,""); // SH07 or SH010
   const versionNum = parseInt(versionMatch[1], 10);
 
@@ -112,7 +135,7 @@ btnUpload.addEventListener("click", async () => {
 });
 
 /**
- * Lista arquivos no bucket e monta um mapa com a última versão por shot.
+ * Lista arquivos no bucket e monta latestShotsMap com a última versão por shot.
  * Suporta arquivos no root e arquivos organizados em pastas (shot/file).
  */
 async function loadShots(){
@@ -120,7 +143,6 @@ async function loadShots(){
   emptyHint.textContent = "Carregando...";
 
   try {
-    // lista entradas no root
     const { data: rootList, error: errRoot } = await client.storage.from(bucketName).list("", { limit: 1000 });
 
     if (errRoot) {
@@ -129,12 +151,9 @@ async function loadShots(){
       return;
     }
 
-    // mapa temporário: key = shotRaw, value = { version:int, path:string, fileName:string }
     const shotsMap = {};
 
-    // função utilitária para processar um arquivo path e atualizar shotsMap
     function processFilePath(path) {
-      // path may be "SH07/sh_07_v001.mov" or "sh_07_v001.mov"
       const filename = path.split("/").pop();
       const shotMatch = filename.match(/(sh[_-]?\d+)/i) || (path.match(/^(sh[_-]?\d+)/i));
       const versionMatch = filename.match(/_v0*(\d+)/i) || filename.match(/v0*(\d+)/i);
@@ -144,52 +163,48 @@ async function loadShots(){
       const shotRaw = shotMatch[1].toUpperCase().replace(/[_-]/g, ""); // e.g. "SH07" or "SH010"
       const version = parseInt(versionMatch[1], 10);
 
-      // if not present or found higher version, replace
       if (!shotsMap[shotRaw] || shotsMap[shotRaw].version < version) {
         shotsMap[shotRaw] = { version, path, fileName: filename };
       }
     }
 
-    // rootList may contain files or folders. Distinguish by simple heuristic:
-    // if entry.name has extension -> treat as file at root, else treat as folder and list inside.
     for (const entry of rootList) {
       const name = entry.name || entry;
       if (name.match(/\.(mov|mp4|m4v)$/i)) {
         // file at root
         processFilePath(name);
       } else {
-        // try list inside folder
         const { data: innerList, error: e2 } = await client.storage.from(bucketName).list(name, { limit: 1000 });
         if (e2) {
-          // fallback: maybe it's a file-like entry; try process as file name
           processFilePath(name);
         } else {
           for (const f of innerList) {
-            // f.name is filename inside folder
             processFilePath(`${name}/${f.name}`);
           }
         }
       }
     }
 
-    // If no shots found:
+    latestShotsMap = shotsMap; // salva globalmente para o player usar
+
     const keys = Object.keys(shotsMap).sort((a,b)=>{
-      // sort numeric after removing "SH"
       const na = parseInt(a.replace(/[^0-9]/g,''),10);
       const nb = parseInt(b.replace(/[^0-9]/g,''),10);
       return na - nb;
     });
+
     if (keys.length === 0) {
       emptyHint.textContent = "Nenhum shot encontrado no bucket. Faça um upload para começar.";
+      latestShotsMap = {};
       return;
     } else {
       emptyHint.textContent = "";
     }
 
     // Render shots (sorted)
+    shotsContainer.innerHTML = "";
     for (const shotKey of keys) {
       const info = shotsMap[shotKey];
-      // build public URL: /storage/v1/object/public/<bucket>/<path>
       const parts = info.path.split("/");
       const encodedParts = parts.map(p => encodeURIComponent(p));
       const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/${bucketName}/${encodedParts.join("/")}`;
@@ -216,6 +231,128 @@ async function loadShots(){
     emptyHint.textContent = "Erro inesperado ao carregar arquivos.";
   }
 }
+
+// ---------- Scene player logic ----------
+let scenePlaylist = []; // array of {shot, url}
+let sceneIndex = 0;
+let sceneVideoEl = null;
+const scenePlayerWrap = document.getElementById("scenePlayerWrap");
+const currentShotLabel = document.getElementById("currentShotLabel");
+
+function buildPlaylistFromLatestShots(){
+  const keys = Object.keys(latestShotsMap).sort((a,b)=>{
+    const na = parseInt(a.replace(/[^0-9]/g,''),10);
+    const nb = parseInt(b.replace(/[^0-9]/g,''),10);
+    return na - nb;
+  });
+  const list = [];
+  for (const k of keys) {
+    const info = latestShotsMap[k];
+    const parts = info.path.split("/");
+    const encodedParts = parts.map(p => encodeURIComponent(p));
+    const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/${bucketName}/${encodedParts.join("/")}`;
+    list.push({ shot: k, url: publicUrl });
+  }
+  return list;
+}
+
+function createOrGetSceneVideo(){
+  if (sceneVideoEl) return sceneVideoEl;
+  const vid = document.createElement("video");
+  vid.controls = true;
+  vid.width = 800;
+  vid.style.maxWidth = "100%";
+  vid.setAttribute("playsinline","");
+  vid.setAttribute("preload","auto");
+  scenePlayerWrap.innerHTML = "";
+  scenePlayerWrap.appendChild(vid);
+  sceneVideoEl = vid;
+
+  // quando terminar um shot, avança
+  vid.addEventListener("ended", () => {
+    sceneNext();
+  });
+
+  return vid;
+}
+
+async function playSceneFrom(index=0){
+  if (!latestShotsMap || Object.keys(latestShotsMap).length === 0) {
+    alert("Não há shots para tocar. Faça upload primeiro.");
+    return;
+  }
+  scenePlaylist = buildPlaylistFromLatestShots();
+  if (scenePlaylist.length === 0) { alert("Playlist vazia."); return; }
+  sceneIndex = index;
+  const vid = createOrGetSceneVideo();
+  const item = scenePlaylist[sceneIndex];
+  vid.src = item.url;
+  currentShotLabel.textContent = `${item.shot} (${sceneIndex+1}/${scenePlaylist.length})`;
+  try {
+    await vid.play();
+  } catch(e){
+    // autoplay pode ser bloqueado; usuário precisará clicar Play manualmente
+    console.warn("play blocked", e);
+  }
+}
+
+function scenePause(){
+  if (sceneVideoEl) sceneVideoEl.pause();
+}
+
+function sceneNext(){
+  if (!scenePlaylist || scenePlaylist.length === 0) return;
+  sceneIndex = Math.min(sceneIndex+1, scenePlaylist.length-1);
+  const item = scenePlaylist[sceneIndex];
+  if (!sceneVideoEl) createOrGetSceneVideo();
+  sceneVideoEl.src = item.url;
+  currentShotLabel.textContent = `${item.shot} (${sceneIndex+1}/${scenePlaylist.length})`;
+  sceneVideoEl.play().catch(()=>{});
+}
+
+function scenePrev(){
+  if (!scenePlaylist || scenePlaylist.length === 0) return;
+  sceneIndex = Math.max(sceneIndex-1, 0);
+  const item = scenePlaylist[sceneIndex];
+  if (!sceneVideoEl) createOrGetSceneVideo();
+  sceneVideoEl.src = item.url;
+  currentShotLabel.textContent = `${item.shot} (${sceneIndex+1}/${scenePlaylist.length})`;
+  sceneVideoEl.play().catch(()=>{});
+}
+
+function stopScene(){
+  if (sceneVideoEl) {
+    sceneVideoEl.pause();
+    sceneVideoEl.currentTime = 0;
+    sceneVideoEl.src = "";
+    scenePlayerWrap.innerHTML = "";
+    sceneVideoEl = null;
+  }
+  scenePlaylist = [];
+  sceneIndex = 0;
+  currentShotLabel.textContent = "";
+}
+
+// bind UI buttons
+btnPlayScene.addEventListener("click", async () => {
+  // ensure latest listing is loaded
+  await loadShots();
+  playSceneFrom(0);
+});
+btnStopScene.addEventListener("click", () => {
+  stopScene();
+});
+document.getElementById("scenePlay").addEventListener("click", async ()=> {
+  if (!sceneVideoEl) {
+    await loadShots();
+    playSceneFrom(sceneIndex || 0);
+  } else {
+    sceneVideoEl.play().catch(()=>{});
+  }
+});
+document.getElementById("scenePause").addEventListener("click", ()=> scenePause());
+document.getElementById("sceneNext").addEventListener("click", ()=> sceneNext());
+document.getElementById("scenePrev").addEventListener("click", ()=> scenePrev());
 
 // inicializa
 loadShots();
