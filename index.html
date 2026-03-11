@@ -81,15 +81,59 @@
 
   /* ─── CONTROLS BAR ──────────────────────────────────────────── */
   #controls-bar { background: var(--bg2); border-top: 1px solid var(--border); padding: 0 16px; display: flex; flex-direction: column; gap: 0; }
-  
-  /* Timeline / progress */
-  #timeline-wrap { position: relative; height: 36px; display: flex; align-items: center; cursor: pointer; }
-  #timeline-track { width: 100%; height: 4px; background: var(--bg3); border-radius: 2px; position: relative; }
-  #timeline-fill { height: 100%; background: var(--accent); border-radius: 2px; width: 0%; pointer-events: none; }
-  #timeline-thumb { position: absolute; top: 50%; left: 0%; transform: translate(-50%, -50%); width: 12px; height: 12px; background: var(--accent); border-radius: 50%; pointer-events: none; transition: width .1s, height .1s; }
-  #timeline-wrap:hover #timeline-thumb { width: 16px; height: 16px; }
-  .comment-marker { position: absolute; top: 50%; transform: translate(-50%, -50%); width: 8px; height: 8px; border-radius: 50%; background: var(--blue); cursor: pointer; z-index: 2; transition: transform .1s; }
-  .comment-marker:hover { transform: translate(-50%, -50%) scale(1.5); }
+
+  /* ─── TIMELINE ───────────────────────────────────────────────── */
+  #timeline-outer { padding: 10px 0 4px; user-select: none; }
+
+  /* Ruler (tick marks + labels) */
+  #timeline-ruler { position: relative; height: 16px; margin-bottom: 4px; pointer-events: none; }
+  .ruler-tick { position: absolute; bottom: 0; width: 1px; background: var(--border2); }
+  .ruler-tick.major { background: var(--border2); height: 8px; }
+  .ruler-tick.minor { height: 4px; opacity: .5; }
+  .ruler-label { position: absolute; bottom: 9px; transform: translateX(-50%); font-family: var(--mono); font-size: 9px; color: var(--muted); white-space: nowrap; }
+
+  /* Track */
+  #timeline-wrap { position: relative; height: 28px; cursor: pointer; display: flex; align-items: center; }
+  #timeline-track { width: 100%; height: 6px; background: var(--bg3); border-radius: 3px; position: relative; overflow: visible; }
+  #timeline-buffered { position: absolute; top: 0; left: 0; height: 100%; background: rgba(255,255,255,.08); border-radius: 3px; pointer-events: none; width: 0%; }
+  #timeline-fill { position: absolute; top: 0; left: 0; height: 100%; background: linear-gradient(90deg, var(--accent2), var(--accent)); border-radius: 3px; width: 0%; pointer-events: none; }
+  #timeline-thumb {
+    position: absolute; top: 50%; left: 0%;
+    transform: translate(-50%, -50%);
+    width: 14px; height: 14px;
+    background: #fff;
+    border-radius: 50%;
+    box-shadow: 0 0 0 3px var(--accent), 0 2px 6px rgba(0,0,0,.6);
+    pointer-events: none;
+    transition: transform .08s, box-shadow .08s;
+    z-index: 4;
+  }
+  #timeline-wrap:hover #timeline-thumb { transform: translate(-50%, -50%) scale(1.2); box-shadow: 0 0 0 3px var(--accent), 0 0 12px rgba(245,166,35,.5); }
+
+  /* Comment markers — diamond shape above the track */
+  .comment-marker {
+    position: absolute;
+    top: -10px;
+    transform: translateX(-50%) rotate(45deg);
+    width: 9px; height: 9px;
+    background: var(--blue);
+    border: 1.5px solid rgba(255,255,255,.25);
+    cursor: pointer;
+    z-index: 3;
+    transition: transform .1s, background .1s;
+    border-radius: 2px;
+  }
+  .comment-marker:hover { transform: translateX(-50%) rotate(45deg) scale(1.4); background: #7eb8ff; }
+
+  /* Hover tooltip */
+  #timeline-tooltip {
+    position: absolute; top: -28px; transform: translateX(-50%);
+    background: var(--bg3); border: 1px solid var(--border2);
+    color: var(--text); font-family: var(--mono); font-size: 10px;
+    padding: 3px 7px; border-radius: 4px; pointer-events: none;
+    opacity: 0; transition: opacity .1s; white-space: nowrap; z-index: 10;
+  }
+  #timeline-wrap:hover #timeline-tooltip { opacity: 1; }
 
   /* Playback buttons */
   #playback-row { display: flex; align-items: center; gap: 12px; padding: 8px 0; }
@@ -210,17 +254,23 @@
               <div style="font-family:var(--mono);font-size:12px;">Select a shot to begin review</div>
             </div>
             <video id="video" style="display:none;" preload="auto"></video>
+            <video id="video-preload" style="display:none;position:absolute;pointer-events:none;" preload="auto" muted></video>
             <canvas id="draw-canvas"></canvas>
           </div>
         </div>
 
         <div id="controls-bar">
           <!-- Timeline -->
-          <div id="timeline-wrap">
-            <div id="timeline-track">
-              <div id="timeline-fill"></div>
-              <div id="timeline-thumb"></div>
-              <div id="comment-markers"></div>
+          <div id="timeline-outer">
+            <div id="timeline-ruler"></div>
+            <div id="timeline-wrap">
+              <div id="timeline-track">
+                <div id="timeline-buffered"></div>
+                <div id="timeline-fill"></div>
+                <div id="comment-markers"></div>
+                <div id="timeline-thumb"></div>
+              </div>
+              <div id="timeline-tooltip">00:00</div>
             </div>
           </div>
 
@@ -318,6 +368,7 @@ let editingCommentId = null;
 
 // ─── DOM refs ─────────────────────────────────────────────────────────────
 const video          = document.getElementById("video");
+const videoPreload   = document.getElementById("video-preload");
 const canvas         = document.getElementById("draw-canvas");
 const ctx            = canvas.getContext("2d");
 const playerWrap     = document.getElementById("player-wrap");
@@ -325,6 +376,9 @@ const placeholder    = document.getElementById("placeholder");
 const timelineFill   = document.getElementById("timeline-fill");
 const timelineThumb  = document.getElementById("timeline-thumb");
 const timelineWrap   = document.getElementById("timeline-wrap");
+const timelineBuffer = document.getElementById("timeline-buffered");
+const timelineRuler  = document.getElementById("timeline-ruler");
+const timelineTip    = document.getElementById("timeline-tooltip");
 const commentMarkers = document.getElementById("comment-markers");
 const timecodeEl     = document.getElementById("timecode");
 const commentTcEl    = document.getElementById("comment-tc-display");
@@ -471,17 +525,12 @@ video.addEventListener("loadedmetadata", () => {
   updateTimecode();
 });
 
-video.addEventListener("ended", () => {
-  if (isSceneMode) {
-    sceneIdx++;
-    if (sceneIdx < shotOrder.length) loadShotForScene(sceneIdx);
-    else { isSceneMode = false; updatePlayBtn(); }
-  }
-  updatePlayBtn();
-});
-
 video.addEventListener("play",  updatePlayBtn);
 video.addEventListener("pause", updatePlayBtn);
+
+function updateCommentTc() {
+  commentTcEl.textContent = `@ ${fmt(video.currentTime)}`;
+}
 
 function updatePlayBtn() {
   document.getElementById("btn-play-pause").textContent = video.paused ? "▶" : "⏸";
@@ -495,27 +544,63 @@ function updateTimeline() {
   const pct = video.duration ? (video.currentTime / video.duration) * 100 : 0;
   timelineFill.style.width = pct + "%";
   timelineThumb.style.left = pct + "%";
+  // buffered
+  if (video.buffered.length > 0 && video.duration) {
+    const bEnd = video.buffered.end(video.buffered.length - 1);
+    timelineBuffer.style.width = (bEnd / video.duration * 100) + "%";
+  }
 }
 
-function updateCommentTc() {
-  commentTcEl.textContent = `@ ${fmt(video.currentTime)}`;
+// ─── RULER ────────────────────────────────────────────────────────────────
+function buildRuler() {
+  timelineRuler.innerHTML = "";
+  const dur = video.duration;
+  if (!dur || !isFinite(dur)) return;
+  const w = timelineRuler.getBoundingClientRect().width;
+  if (!w) return;
+
+  // Choose interval: aim for ~60-80px between major ticks
+  const intervals = [1, 2, 5, 10, 15, 30, 60, 120, 300];
+  let interval = intervals.find(i => (i / dur) * w >= 55) || 300;
+  const minorInterval = interval <= 5 ? 1 : interval <= 30 ? 5 : 10;
+
+  for (let t = 0; t <= dur; t += minorInterval) {
+    const pct = (t / dur) * 100;
+    const isMajor = t % interval === 0;
+    const tick = document.createElement("div");
+    tick.className = "ruler-tick " + (isMajor ? "major" : "minor");
+    tick.style.left = pct + "%";
+    timelineRuler.appendChild(tick);
+    if (isMajor) {
+      const label = document.createElement("div");
+      label.className = "ruler-label";
+      label.style.left = pct + "%";
+      label.textContent = fmt(t);
+      timelineRuler.appendChild(label);
+    }
+  }
 }
 
-function updateTimecode() {
-  timecodeEl.textContent = `${fmt(video.currentTime)} / ${fmt(video.duration)}`;
-}
+video.addEventListener("loadedmetadata", buildRuler);
+new ResizeObserver(buildRuler).observe(timelineRuler);
 
-// ─── TIMELINE SCRUB ───────────────────────────────────────────────────────
+// ─── TIMELINE SCRUB + TOOLTIP ────────────────────────────────────────────
 let scrubbing = false;
 
 function scrubTo(e) {
   const rect = timelineWrap.getBoundingClientRect();
   const x = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
   const pct = x / rect.width;
-  if (video.duration) video.currentTime = pct * video.duration;
+  // Update tooltip
+  if (video.duration) {
+    timelineTip.textContent = fmt(pct * video.duration);
+    timelineTip.style.left = (pct * 100) + "%";
+    if (scrubbing) video.currentTime = pct * video.duration;
+  }
 }
 
-timelineWrap.addEventListener("mousedown", e => { scrubbing = true; scrubTo(e); });
+timelineWrap.addEventListener("mousedown", e => { scrubbing = true; scrubTo(e); video.currentTime = (Math.max(0, Math.min(e.clientX - timelineWrap.getBoundingClientRect().left, timelineWrap.getBoundingClientRect().width)) / timelineWrap.getBoundingClientRect().width) * (video.duration || 0); });
+timelineWrap.addEventListener("mousemove", scrubTo);
 document.addEventListener("mousemove", e => { if (scrubbing) scrubTo(e); });
 document.addEventListener("mouseup", () => { scrubbing = false; });
 
@@ -564,15 +649,15 @@ document.addEventListener("keydown", e => {
   if (e.code === "KeyD") document.getElementById("btn-draw").click();
 });
 
-// ─── PLAY SCENE ───────────────────────────────────────────────────────────
+// ─── PLAY SCENE (double-buffer — zero black frame) ───────────────────────
 document.getElementById("btn-play-scene").addEventListener("click", () => {
   if (!shotOrder.length) return;
   isSceneMode = true;
   sceneIdx = 0;
-  loadShotForScene(0);
+  startSceneFrom(0);
 });
 
-function loadShotForScene(idx) {
+function startSceneFrom(idx) {
   const key = shotOrder[idx];
   if (!key) return;
   currentShot = key;
@@ -580,9 +665,49 @@ function loadShotForScene(idx) {
   video.style.display = "block";
   video.src = shots[key].url;
   video.load();
-  video.play();
-  loadAnnotations(key).then(() => loadComments(key).then(() => { renderShotList(); renderComments(); renderMarkers(); }));
+  video.play().catch(() => {});
+  preloadNext(idx + 1);
+  loadAnnotations(key).then(() => loadComments(key).then(() => {
+    renderShotList(); renderComments(); renderMarkers();
+  }));
 }
+
+function preloadNext(idx) {
+  const key = shotOrder[idx];
+  if (!key) { videoPreload.src = ""; return; }
+  videoPreload.src = shots[key].url;
+  videoPreload.load();
+}
+
+// Override the ended handler to use preloaded video (swap src instantly)
+video.addEventListener("ended", () => {
+  if (isSceneMode) {
+    sceneIdx++;
+    if (sceneIdx < shotOrder.length) {
+      const key = shotOrder[sceneIdx];
+      currentShot = key;
+      // If preload has same src and is ready, swap instantly
+      if (videoPreload.src === shots[key].url && videoPreload.readyState >= 2) {
+        video.src = videoPreload.src;
+        video.currentTime = 0;
+        video.play().catch(() => {});
+      } else {
+        // fallback — just set src normally
+        video.src = shots[key].url;
+        video.load();
+        video.play().catch(() => {});
+      }
+      preloadNext(sceneIdx + 1);
+      loadAnnotations(key).then(() => loadComments(key).then(() => {
+        renderShotList(); renderComments(); renderMarkers();
+      }));
+    } else {
+      isSceneMode = false;
+      updatePlayBtn();
+    }
+  }
+  updatePlayBtn();
+});
 
 // ─── EXPORT SCENE ────────────────────────────────────────────────────────
 document.getElementById("btn-export").addEventListener("click", async () => {
