@@ -1,986 +1,887 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>AnimReview — Shot Review Tool</title>
-<link rel="preconnect" href="https://fonts.googleapis.com" />
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>AnimReview</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
-  /* ─── RESET & BASE ─────────────────────────────────────────── */
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-  :root {
-    --bg:        #0c0d0f;
-    --bg2:       #141518;
-    --bg3:       #1c1e23;
-    --border:    #2a2d35;
-    --border2:   #373b47;
-    --text:      #e2e4ea;
-    --muted:     #6b7080;
-    --accent:    #f5a623;
-    --accent2:   #e87c1e;
-    --green:     #3ecf8e;
-    --red:       #f25c5c;
-    --blue:      #4f8cff;
-    --mono:      'IBM Plex Mono', monospace;
-    --sans:      'IBM Plex Sans', sans-serif;
-    --radius:    6px;
-    --sidebar:   280px;
-  }
-  html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font-family: var(--sans); font-size: 13px; }
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0d0e11;--bg2:#141618;--bg3:#1c1f25;--bg4:#242830;
+  --border:#252830;--border2:#353a47;
+  --text:#dde1ea;--muted:#5c6272;--muted2:#7a8399;
+  --accent:#f5a623;--accent2:#e07c10;
+  --green:#3ecf8e;--red:#f05c5c;--blue:#4d8fff;
+  --mono:'IBM Plex Mono',monospace;--sans:'IBM Plex Sans',sans-serif;
+  --r:5px;--sidebar:272px;--rpanel:296px;
+}
+html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:var(--sans);font-size:13px}
 
-  /* ─── LAYOUT ────────────────────────────────────────────────── */
-  #app { display: grid; grid-template-columns: var(--sidebar) 1fr; grid-template-rows: 48px 1fr; height: 100vh; }
-  #topbar { grid-column: 1 / -1; display: flex; align-items: center; gap: 16px; padding: 0 20px; background: var(--bg2); border-bottom: 1px solid var(--border); z-index: 10; }
-  #sidebar { background: var(--bg2); border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
-  #main { display: flex; flex-direction: column; overflow: hidden; }
+/* LAYOUT */
+#app{display:grid;grid-template-columns:var(--sidebar) 1fr;grid-template-rows:46px 1fr;height:100vh}
+#topbar{grid-column:1/-1;display:flex;align-items:center;gap:12px;padding:0 16px;background:var(--bg2);border-bottom:1px solid var(--border);z-index:20}
+#sidebar{background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
+#main{display:flex;flex-direction:column;overflow:hidden}
+#main-body{display:flex;flex:1;overflow:hidden}
 
-  /* ─── TOPBAR ────────────────────────────────────────────────── */
-  .logo { font-family: var(--mono); font-weight: 600; font-size: 14px; color: var(--accent); letter-spacing: 0.05em; flex-shrink: 0; }
-  .logo span { color: var(--muted); }
-  .topbar-spacer { flex: 1; }
-  #scene-label { font-family: var(--mono); font-size: 11px; color: var(--muted); }
-  #btn-play-scene, #btn-export { padding: 7px 16px; border-radius: var(--radius); border: none; cursor: pointer; font-family: var(--mono); font-size: 12px; font-weight: 500; transition: all .15s; }
-  #btn-play-scene { background: var(--bg3); color: var(--text); border: 1px solid var(--border2); }
-  #btn-play-scene:hover { background: var(--border2); }
-  #btn-export { background: var(--accent); color: #000; }
-  #btn-export:hover { background: var(--accent2); }
-  #upload-btn-wrap { position: relative; }
-  #upload-btn-wrap input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
-  .btn-upload { padding: 7px 14px; border-radius: var(--radius); background: var(--bg3); border: 1px solid var(--border2); color: var(--text); font-family: var(--mono); font-size: 12px; cursor: pointer; transition: all .15s; display: flex; align-items: center; gap: 6px; }
-  .btn-upload:hover { background: var(--border2); }
-  #upload-progress { display: none; align-items: center; gap: 8px; font-family: var(--mono); font-size: 11px; color: var(--accent); }
-  .spinner { width: 12px; height: 12px; border: 2px solid var(--border2); border-top-color: var(--accent); border-radius: 50%; animation: spin .6s linear infinite; }
-  @keyframes spin { to { transform: rotate(360deg); } }
+/* TOPBAR */
+.logo{font-family:var(--mono);font-weight:600;font-size:13px;color:var(--accent);letter-spacing:.06em;flex-shrink:0}
+.logo b{color:var(--muted2)}
+.tsep{width:1px;height:20px;background:var(--border2);flex-shrink:0}
+.topbar-spacer{flex:1}
+.tbtn{padding:6px 13px;border-radius:var(--r);border:1px solid var(--border2);background:var(--bg3);color:var(--text);font-family:var(--mono);font-size:11px;cursor:pointer;transition:all .12s;white-space:nowrap}
+.tbtn:hover{background:var(--bg4)}
+.tbtn.primary{background:var(--accent);color:#000;border-color:var(--accent);font-weight:600}
+.tbtn.primary:hover{background:var(--accent2)}
+#upload-wrap{position:relative}
+#upload-wrap input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer}
+#upload-progress{display:none;align-items:center;gap:7px;font-family:var(--mono);font-size:11px;color:var(--accent)}
+.spin{width:11px;height:11px;border:2px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin .55s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+#scene-info{font-family:var(--mono);font-size:10px;color:var(--muted)}
 
-  /* ─── SIDEBAR ────────────────────────────────────────────────── */
-  .sidebar-header { padding: 12px 14px 8px; font-family: var(--mono); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
-  #shot-list { flex: 1; overflow-y: auto; padding: 6px; }
-  #shot-list::-webkit-scrollbar { width: 4px; }
-  #shot-list::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 4px; }
-  .shot-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: var(--radius); cursor: pointer; transition: background .12s; border: 1px solid transparent; margin-bottom: 3px; }
-  .shot-item:hover { background: var(--bg3); }
-  .shot-item.active { background: var(--bg3); border-color: var(--accent); }
-  .shot-thumb { width: 52px; height: 30px; object-fit: cover; border-radius: 3px; background: var(--bg3); flex-shrink: 0; border: 1px solid var(--border); }
-  .shot-thumb-placeholder { width: 52px; height: 30px; flex-shrink: 0; background: var(--bg3); border-radius: 3px; border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; color: var(--border2); font-size: 16px; }
-  .shot-info { flex: 1; min-width: 0; }
-  .shot-name { font-family: var(--mono); font-size: 12px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .shot-version { font-family: var(--mono); font-size: 10px; color: var(--green); margin-top: 2px; }
-  .shot-comment-count { font-family: var(--mono); font-size: 10px; color: var(--muted); margin-top: 1px; }
-  .sidebar-footer { padding: 10px 14px; border-top: 1px solid var(--border); font-family: var(--mono); font-size: 10px; color: var(--muted); }
+/* SIDEBAR */
+.sh{padding:10px 12px 8px;font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+#shot-list{flex:1;overflow-y:auto;padding:5px}
+#shot-list::-webkit-scrollbar{width:3px}
+#shot-list::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+.shot-item{display:flex;align-items:center;gap:9px;padding:7px 9px;border-radius:var(--r);cursor:pointer;transition:background .1s;border:1px solid transparent;margin-bottom:2px}
+.shot-item:hover{background:var(--bg3)}
+.shot-item.active{background:var(--bg3);border-color:var(--accent)}
+.shot-thumb-wrap{width:54px;height:32px;flex-shrink:0;border-radius:3px;overflow:hidden;background:var(--bg4);border:1px solid var(--border)}
+.shot-thumb-wrap canvas{width:100%;height:100%;display:block}
+.shot-info{flex:1;min-width:0}
+.shot-name{font-family:var(--mono);font-size:11px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.shot-ver{font-family:var(--mono);font-size:10px;color:var(--green);margin-top:1px}
+.shot-coms{font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:1px}
+.shot-status{display:inline-block;font-family:var(--mono);font-size:9px;padding:1px 5px;border-radius:3px;margin-top:3px;font-weight:500}
+.s-review{background:rgba(245,166,35,.15);color:var(--accent)}
+.s-approved{background:rgba(62,207,142,.15);color:var(--green)}
+.s-wip{background:rgba(77,143,255,.12);color:var(--blue)}
 
-  /* ─── PLAYER AREA ──────────────────────────────────────────── */
-  #player-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: #000; position: relative; }
-  #player-wrap { position: relative; flex: 1; display: flex; align-items: center; justify-content: center; overflow: hidden; background: #000; }
-  #player-wrap video { max-width: 100%; max-height: 100%; display: block; }
-  #draw-canvas { position: absolute; top: 0; left: 0; cursor: crosshair; display: none; touch-action: none; }
-  #player-wrap.draw-mode #draw-canvas { display: block; }
-  .no-shot-placeholder { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: var(--muted); flex: 1; }
-  .no-shot-placeholder .icon { font-size: 48px; opacity: .3; }
+/* PLAYER */
+#player-area{flex:1;display:flex;flex-direction:column;overflow:hidden;background:#000}
+#player-wrap{position:relative;flex:1;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#000}
+#player-wrap video{max-width:100%;max-height:100%;display:block;pointer-events:none}
+#ann-canvas{position:absolute;top:0;left:0;pointer-events:none}
+#draw-canvas{position:absolute;top:0;left:0;touch-action:none;display:none;cursor:crosshair}
+#prev-canvas{position:absolute;top:0;left:0;pointer-events:none}
+#player-wrap.draw-mode #draw-canvas{display:block}
+.no-shot{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:var(--muted)}
+.no-shot .ic{font-size:40px;opacity:.25}
 
-  /* ─── CONTROLS BAR ──────────────────────────────────────────── */
-  #controls-bar { background: var(--bg2); border-top: 1px solid var(--border); padding: 0 16px; display: flex; flex-direction: column; gap: 0; }
+/* CONTROLS BAR */
+#controls-bar{background:var(--bg2);border-top:1px solid var(--border);padding:0 14px;flex-shrink:0}
 
-  /* ─── TIMELINE ───────────────────────────────────────────────── */
-  #timeline-outer { padding: 10px 0 4px; user-select: none; }
+/* TIMELINE — SyncSketch frame-accurate style */
+#tl-outer{padding:8px 0 2px}
 
-  /* Ruler (tick marks + labels) */
-  #timeline-ruler { position: relative; height: 16px; margin-bottom: 4px; pointer-events: none; }
-  .ruler-tick { position: absolute; bottom: 0; width: 1px; background: var(--border2); }
-  .ruler-tick.major { background: var(--border2); height: 8px; }
-  .ruler-tick.minor { height: 4px; opacity: .5; }
-  .ruler-label { position: absolute; bottom: 9px; transform: translateX(-50%); font-family: var(--mono); font-size: 9px; color: var(--muted); white-space: nowrap; }
+#tl-ruler{height:20px;position:relative;pointer-events:none;margin-bottom:2px}
+.rl-tick{position:absolute;bottom:0;width:1px;background:var(--border2)}
+.rl-tick.major{height:10px}
+.rl-tick.minor{height:4px;opacity:.35}
+.rl-label{position:absolute;bottom:11px;transform:translateX(-50%);font-family:var(--mono);font-size:9px;color:var(--muted);white-space:nowrap}
 
-  /* Track */
-  #timeline-wrap { position: relative; height: 28px; cursor: pointer; display: flex; align-items: center; }
-  #timeline-track { width: 100%; height: 6px; background: var(--bg3); border-radius: 3px; position: relative; overflow: visible; }
-  #timeline-buffered { position: absolute; top: 0; left: 0; height: 100%; background: rgba(255,255,255,.08); border-radius: 3px; pointer-events: none; width: 0%; }
-  #timeline-fill { position: absolute; top: 0; left: 0; height: 100%; background: linear-gradient(90deg, var(--accent2), var(--accent)); border-radius: 3px; width: 0%; pointer-events: none; }
-  #timeline-thumb {
-    position: absolute; top: 50%; left: 0%;
-    transform: translate(-50%, -50%);
-    width: 14px; height: 14px;
-    background: #fff;
-    border-radius: 50%;
-    box-shadow: 0 0 0 3px var(--accent), 0 2px 6px rgba(0,0,0,.6);
-    pointer-events: none;
-    transition: transform .08s, box-shadow .08s;
-    z-index: 4;
-  }
-  #timeline-wrap:hover #timeline-thumb { transform: translate(-50%, -50%) scale(1.2); box-shadow: 0 0 0 3px var(--accent), 0 0 12px rgba(245,166,35,.5); }
+/* Track area — taller, more presence */
+#tl-track-wrap{position:relative;height:32px;cursor:col-resize;display:flex;align-items:center}
+#tl-track{width:100%;height:8px;background:var(--bg4);border-radius:4px;position:relative;border:1px solid var(--border)}
+#tl-buffered{position:absolute;top:0;left:0;height:100%;background:rgba(255,255,255,.06);border-radius:4px;pointer-events:none}
+#tl-played{position:absolute;top:0;left:0;height:100%;background:var(--accent);border-radius:4px;pointer-events:none;opacity:.9}
 
-  /* Comment markers — diamond shape above the track */
-  .comment-marker {
-    position: absolute;
-    top: -10px;
-    transform: translateX(-50%) rotate(45deg);
-    width: 9px; height: 9px;
-    background: var(--blue);
-    border: 1.5px solid rgba(255,255,255,.25);
-    cursor: pointer;
-    z-index: 3;
-    transition: transform .1s, background .1s;
-    border-radius: 2px;
-  }
-  .comment-marker:hover { transform: translateX(-50%) rotate(45deg) scale(1.4); background: #7eb8ff; }
+/* Sketch and comment markers inside the track */
+#tl-markers{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;overflow:visible}
+.sk-mk{position:absolute;top:-6px;bottom:-6px;width:2px;transform:translateX(-50%);background:var(--blue);border-radius:1px;cursor:pointer;pointer-events:all;opacity:.9}
+.sk-mk:hover{background:#8bbfff;opacity:1}
+.cm-mk{position:absolute;top:-8px;bottom:-8px;width:2px;transform:translateX(-50%);background:var(--accent);opacity:.75;border-radius:1px;cursor:pointer;pointer-events:all}
+.cm-mk:hover{opacity:1}
 
-  /* Hover tooltip */
-  #timeline-tooltip {
-    position: absolute; top: -28px; transform: translateX(-50%);
-    background: var(--bg3); border: 1px solid var(--border2);
-    color: var(--text); font-family: var(--mono); font-size: 10px;
-    padding: 3px 7px; border-radius: 4px; pointer-events: none;
-    opacity: 0; transition: opacity .1s; white-space: nowrap; z-index: 10;
-  }
-  #timeline-wrap:hover #timeline-tooltip { opacity: 1; }
+/* Playhead — vertical line with top triangle */
+#tl-head{position:absolute;top:-8px;bottom:-8px;width:2px;left:0;transform:translateX(-50%);background:var(--text);pointer-events:none;z-index:5;border-radius:1px}
+#tl-head::before{content:'';position:absolute;top:-1px;left:50%;transform:translateX(-50%);border-left:5px solid transparent;border-right:5px solid transparent;border-top:7px solid var(--text)}
 
-  /* Playback buttons */
-  #playback-row { display: flex; align-items: center; gap: 12px; padding: 8px 0; }
-  .ctrl-btn { width: 36px; height: 36px; border-radius: var(--radius); border: 1px solid var(--border2); background: var(--bg3); color: var(--text); cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 14px; transition: all .12s; flex-shrink: 0; }
-  .ctrl-btn:hover { background: var(--border2); }
-  .ctrl-btn.active { background: var(--accent); color: #000; border-color: var(--accent); }
-  #btn-play-pause { width: 44px; height: 44px; font-size: 18px; background: var(--accent); color: #000; border-color: var(--accent); }
-  #btn-play-pause:hover { background: var(--accent2); }
-  #timecode { font-family: var(--mono); font-size: 13px; color: var(--text); min-width: 110px; }
-  .playback-spacer { flex: 1; }
-  #volume-wrap { display: flex; align-items: center; gap: 6px; }
-  #volume-wrap input[type=range] { width: 70px; accent-color: var(--accent); cursor: pointer; }
-  #speed-select { background: var(--bg3); border: 1px solid var(--border2); color: var(--text); font-family: var(--mono); font-size: 11px; padding: 4px 6px; border-radius: var(--radius); cursor: pointer; }
+/* Hover tooltip */
+#tl-tip{position:absolute;top:-26px;transform:translateX(-50%);background:var(--bg3);border:1px solid var(--border2);color:var(--text);font-family:var(--mono);font-size:10px;padding:2px 8px;border-radius:4px;pointer-events:none;opacity:0;transition:opacity .1s;white-space:nowrap;z-index:10}
+#tl-track-wrap:hover #tl-tip{opacity:1}
 
-  /* Draw toolbar */
-  #draw-toolbar { display: none; align-items: center; gap: 8px; padding: 6px 0; border-top: 1px solid var(--border); }
-  #draw-toolbar.visible { display: flex; }
-  .color-swatch { width: 20px; height: 20px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; transition: border-color .1s; flex-shrink: 0; }
-  .color-swatch.selected { border-color: #fff; }
-  #brush-size { width: 60px; accent-color: var(--accent); }
-  .draw-sep { width: 1px; height: 20px; background: var(--border); }
-  #btn-clear-canvas { font-family: var(--mono); font-size: 11px; padding: 4px 10px; background: var(--bg3); border: 1px solid var(--border2); color: var(--muted); border-radius: var(--radius); cursor: pointer; }
-  #btn-clear-canvas:hover { color: var(--red); border-color: var(--red); }
-  #btn-save-frame { font-family: var(--mono); font-size: 11px; padding: 4px 10px; background: var(--green); border: 1px solid var(--green); color: #000; border-radius: var(--radius); cursor: pointer; font-weight: 500; }
+/* PLAYBACK ROW */
+#pb-row{display:flex;align-items:center;gap:9px;padding:6px 0 8px}
+.cb{width:30px;height:30px;border-radius:var(--r);border:1px solid var(--border2);background:var(--bg3);color:var(--text);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:12px;transition:all .1s;flex-shrink:0}
+.cb:hover{background:var(--bg4)}
+.cb.active{background:var(--accent);color:#000;border-color:var(--accent)}
+#btn-pp{width:38px;height:38px;font-size:15px;background:var(--accent);color:#000;border-color:var(--accent)}
+#btn-pp:hover{background:var(--accent2)}
+#timecode{font-family:var(--mono);font-size:11px;color:var(--text);min-width:120px;user-select:none}
+#framenumber{font-family:var(--mono);font-size:11px;color:var(--blue);min-width:48px;user-select:none;font-weight:500}
+.pb-sp{flex:1}
+#vol-wrap{display:flex;align-items:center;gap:5px;color:var(--muted2);font-size:11px}
+#vol-wrap input{width:60px;accent-color:var(--accent);cursor:pointer}
+#spd-sel{background:var(--bg3);border:1px solid var(--border2);color:var(--text);font-family:var(--mono);font-size:10px;padding:3px 5px;border-radius:var(--r);cursor:pointer}
 
-  /* ─── RIGHT PANEL (Comments) ──────────────────────────────── */
-  #right-panel { width: 300px; border-left: 1px solid var(--border); background: var(--bg2); display: flex; flex-direction: column; overflow: hidden; }
-  #main-content { display: flex; flex: 1; overflow: hidden; }
+/* DRAW TOOLBAR */
+#draw-bar{display:none;align-items:center;gap:5px;padding:5px 0 7px;border-top:1px solid var(--border);flex-wrap:wrap}
+#draw-bar.on{display:flex}
+.tbtn-tool{width:28px;height:28px;border-radius:var(--r);border:1px solid var(--border2);background:var(--bg3);color:var(--muted2);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:13px;transition:all .1s;flex-shrink:0}
+.tbtn-tool:hover{background:var(--bg4);color:var(--text)}
+.tbtn-tool.active{background:var(--accent);color:#000;border-color:var(--accent)}
+.cs{width:17px;height:17px;border-radius:50%;cursor:pointer;border:2px solid transparent;transition:border-color .1s;flex-shrink:0}
+.cs.sel{border-color:#fff}
+.dsep{width:1px;height:20px;background:var(--border2);flex-shrink:0;margin:0 2px}
+.db-lbl{font-family:var(--mono);font-size:9px;color:var(--muted);flex-shrink:0}
+#brush-sz,#opacity-sl{width:50px;accent-color:var(--accent);cursor:pointer}
+.da{font-family:var(--mono);font-size:10px;padding:3px 8px;border-radius:var(--r);border:1px solid var(--border2);background:transparent;cursor:pointer;color:var(--muted2);transition:all .1s;white-space:nowrap}
+.da:hover{color:var(--text);background:var(--bg4)}
+.da.save{background:var(--green);color:#000;border-color:var(--green);font-weight:600}
+.da.danger:hover{color:var(--red);border-color:var(--red)}
+#btn-toggle-ann{font-family:var(--mono);font-size:10px;padding:3px 8px;border-radius:var(--r);border:1px solid var(--blue);background:transparent;cursor:pointer;color:var(--blue);transition:all .1s}
+#btn-toggle-ann.off{border-color:var(--border2);color:var(--muted)}
 
-  .panel-header { padding: 12px 14px; font-family: var(--mono); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
-  .panel-header span.count { background: var(--bg3); border-radius: 10px; padding: 2px 7px; font-size: 10px; color: var(--text); }
+/* RIGHT PANEL */
+#right-panel{width:var(--rpanel);border-left:1px solid var(--border);background:var(--bg2);display:flex;flex-direction:column;overflow:hidden}
+.ph{padding:9px 12px;font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.ph .cnt{background:var(--bg3);border-radius:8px;padding:1px 6px;font-size:10px;color:var(--text)}
+#status-bar{padding:6px 10px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:5px;flex-shrink:0}
+.sp-lbl{font-family:var(--mono);font-size:10px;color:var(--muted)}
+.sp-btn{font-family:var(--mono);font-size:9px;padding:2px 6px;border-radius:3px;border:1px solid var(--border2);background:transparent;cursor:pointer;color:var(--muted2);transition:all .1s}
+.sp-btn.active.wip{color:var(--blue);border-color:var(--blue)}
+.sp-btn.active.review{color:var(--accent);border-color:var(--accent)}
+.sp-btn.active.approved{color:var(--green);border-color:var(--green)}
+#clist{flex:1;overflow-y:auto;padding:7px;display:flex;flex-direction:column;gap:5px}
+#clist::-webkit-scrollbar{width:3px}
+#clist::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+.ccard{background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:9px 11px;cursor:pointer;transition:border-color .12s}
+.ccard:hover{border-color:var(--border2)}
+.ccard.hl{border-color:var(--accent)}
+.ccard.has-sk{border-left:3px solid var(--blue)}
+.ctc{font-family:var(--mono);font-size:10px;color:var(--accent);margin-bottom:4px;display:flex;align-items:center;gap:5px}
+.ctc-f{color:var(--blue)}
+.ctc-sk{font-size:9px;color:var(--blue)}
+.ctext{font-size:12px;line-height:1.5;color:var(--text);word-break:break-word}
+.cacts{display:none;gap:4px;margin-top:7px}
+.ccard:hover .cacts{display:flex}
+.cacts button{font-family:var(--mono);font-size:10px;padding:2px 6px;border-radius:3px;border:1px solid var(--border2);background:transparent;cursor:pointer;color:var(--muted2);transition:all .1s}
+.cacts .goto{color:var(--blue)}
+.cacts .goto:hover{background:rgba(77,143,255,.1);border-color:var(--blue)}
+.cacts .edit:hover{color:var(--text);background:var(--bg)}
+.cacts .del{color:var(--red);border-color:transparent}
+.cacts .del:hover{background:rgba(240,92,92,.1);border-color:var(--red)}
+#cinput-wrap{padding:9px;border-top:1px solid var(--border);flex-shrink:0}
+#ctc-display{font-family:var(--mono);font-size:10px;color:var(--accent);margin-bottom:5px}
+#cinput{width:100%;background:var(--bg3);border:1px solid var(--border2);color:var(--text);border-radius:var(--r);padding:7px 9px;font-family:var(--sans);font-size:12px;resize:none;height:54px;transition:border-color .12s;display:block}
+#cinput:focus{outline:none;border-color:var(--accent)}
+#btn-addcom{width:100%;margin-top:6px;padding:7px;background:var(--accent);color:#000;border:none;border-radius:var(--r);font-family:var(--mono);font-size:12px;font-weight:600;cursor:pointer;transition:background .12s}
+#btn-addcom:hover{background:var(--accent2)}
 
-  #comments-list { flex: 1; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 6px; }
-  #comments-list::-webkit-scrollbar { width: 4px; }
-  #comments-list::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 4px; }
+/* TOAST */
+#toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(14px);background:var(--bg3);border:1px solid var(--border2);color:var(--text);font-family:var(--mono);font-size:11px;padding:7px 16px;border-radius:14px;opacity:0;pointer-events:none;transition:all .2s;z-index:999}
+#toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+#toast.ok{border-color:var(--green);color:var(--green)}
+#toast.err{border-color:var(--red);color:var(--red)}
 
-  .comment-card { background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 12px; cursor: pointer; transition: border-color .12s; }
-  .comment-card:hover { border-color: var(--border2); }
-  .comment-card.highlight { border-color: var(--blue); }
-  .comment-tc { font-family: var(--mono); font-size: 11px; color: var(--blue); margin-bottom: 5px; display: flex; align-items: center; gap: 6px; }
-  .comment-tc::before { content: ''; display: block; width: 6px; height: 6px; border-radius: 50%; background: var(--blue); flex-shrink: 0; }
-  .comment-text { font-size: 12px; line-height: 1.5; color: var(--text); word-break: break-word; }
-  .comment-actions { display: none; gap: 6px; margin-top: 8px; }
-  .comment-card:hover .comment-actions { display: flex; }
-  .comment-actions button { font-family: var(--mono); font-size: 10px; padding: 3px 8px; border-radius: 3px; border: 1px solid var(--border2); background: transparent; cursor: pointer; color: var(--muted); transition: all .12s; }
-  .comment-actions .btn-edit { color: var(--text); }
-  .comment-actions .btn-edit:hover { background: var(--bg); }
-  .comment-actions .btn-del { color: var(--red); border-color: transparent; }
-  .comment-actions .btn-del:hover { background: rgba(242,92,92,.1); border-color: var(--red); }
+/* MODAL */
+#modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:100;align-items:center;justify-content:center}
+#modal.on{display:flex}
+.mbox{background:var(--bg2);border:1px solid var(--border2);border-radius:10px;padding:22px;width:350px}
+.mbox h3{font-family:var(--mono);font-size:13px;margin-bottom:12px}
+.mbox textarea{width:100%;background:var(--bg3);border:1px solid var(--border2);color:var(--text);border-radius:var(--r);padding:7px 9px;font-family:var(--sans);font-size:12px;resize:none;height:80px}
+.mbox textarea:focus{outline:none;border-color:var(--accent)}
+.macts{display:flex;gap:7px;justify-content:flex-end;margin-top:10px}
+.macts button{padding:6px 14px;border-radius:var(--r);font-family:var(--mono);font-size:11px;cursor:pointer;border:1px solid var(--border2)}
+.mcancel{background:transparent;color:var(--muted2)}
+.mcancel:hover{color:var(--text)}
+.mok{background:var(--accent);color:#000;border-color:var(--accent);font-weight:600}
 
-  #comment-input-wrap { padding: 10px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; }
-  #comment-tc-display { font-family: var(--mono); font-size: 11px; color: var(--blue); }
-  #comment-input { width: 100%; background: var(--bg3); border: 1px solid var(--border2); color: var(--text); border-radius: var(--radius); padding: 8px 10px; font-family: var(--sans); font-size: 12px; resize: none; height: 60px; transition: border-color .12s; }
-  #comment-input:focus { outline: none; border-color: var(--accent); }
-  #btn-add-comment { width: 100%; padding: 8px; background: var(--accent); color: #000; border: none; border-radius: var(--radius); font-family: var(--mono); font-size: 12px; font-weight: 600; cursor: pointer; transition: background .12s; }
-  #btn-add-comment:hover { background: var(--accent2); }
-
-  /* ─── TOAST ─────────────────────────────────────────────────── */
-  #toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(20px); background: var(--bg2); border: 1px solid var(--border2); color: var(--text); font-family: var(--mono); font-size: 12px; padding: 10px 20px; border-radius: 20px; opacity: 0; pointer-events: none; transition: all .25s; z-index: 999; }
-  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
-  #toast.ok { border-color: var(--green); color: var(--green); }
-  #toast.err { border-color: var(--red); color: var(--red); }
-
-  /* ─── MODAL ─────────────────────────────────────────────────── */
-  #modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.7); z-index: 100; align-items: center; justify-content: center; }
-  #modal-overlay.open { display: flex; }
-  .modal-box { background: var(--bg2); border: 1px solid var(--border2); border-radius: 10px; padding: 24px; width: 380px; }
-  .modal-box h3 { font-family: var(--mono); font-size: 14px; margin-bottom: 16px; }
-  .modal-box input, .modal-box textarea { width: 100%; background: var(--bg3); border: 1px solid var(--border2); color: var(--text); border-radius: var(--radius); padding: 8px 10px; font-family: var(--sans); font-size: 13px; margin-bottom: 10px; }
-  .modal-box input:focus, .modal-box textarea:focus { outline: none; border-color: var(--accent); }
-  .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 4px; }
-  .modal-actions button { padding: 7px 16px; border-radius: var(--radius); font-family: var(--mono); font-size: 12px; cursor: pointer; border: 1px solid var(--border2); }
-  .btn-cancel { background: transparent; color: var(--muted); }
-  .btn-confirm { background: var(--accent); color: #000; border-color: var(--accent); font-weight: 600; }
-  .btn-cancel:hover { color: var(--text); }
-
-  /* ─── SCROLLBAR GLOBAL ───────────────────────────────────────── */
-  * { scrollbar-width: thin; scrollbar-color: var(--border2) transparent; }
+*{scrollbar-width:thin;scrollbar-color:var(--border2) transparent}
 </style>
 </head>
 <body>
-
 <div id="app">
 
-  <!-- TOPBAR -->
-  <header id="topbar">
-    <div class="logo">ANIM<span>/</span>REVIEW</div>
-    <div id="upload-btn-wrap">
-      <label class="btn-upload">⬆ Upload Shot<input type="file" id="file-input" accept="video/*" multiple /></label>
-    </div>
-    <div id="upload-progress"><div class="spinner"></div><span id="upload-label">Uploading…</span></div>
-    <div class="topbar-spacer"></div>
-    <div id="scene-label">— no scene —</div>
-    <button id="btn-play-scene">▶ Play Scene</button>
-    <button id="btn-export">⬇ Export Scene</button>
-  </header>
+<header id="topbar">
+  <div class="logo">ANIM<b>/</b>REVIEW</div>
+  <div class="tsep"></div>
+  <div id="upload-wrap">
+    <label class="tbtn">⬆ Upload<input type="file" id="file-input" accept="video/*" multiple/></label>
+  </div>
+  <div id="upload-progress"><div class="spin"></div><span id="ulabel">Uploading…</span></div>
+  <div class="topbar-spacer"></div>
+  <span id="scene-info" style="font-family:var(--mono);font-size:10px;color:var(--muted)">—</span>
+  <button class="tbtn" id="btn-play-scene">▶ Play Scene</button>
+  <button class="tbtn primary" id="btn-export">⬇ Export</button>
+</header>
 
-  <!-- SIDEBAR -->
-  <aside id="sidebar">
-    <div class="sidebar-header">
-      Shots
-      <span id="shot-count" style="color:var(--text)">0</span>
-    </div>
-    <div id="shot-list"><div style="padding:20px 14px;color:var(--muted);font-family:var(--mono);font-size:11px;">No shots yet.<br>Upload a file like<br><b style="color:var(--text)">sh_01_v001.mp4</b></div></div>
-    <div class="sidebar-footer" id="sidebar-footer"></div>
-  </aside>
+<aside id="sidebar">
+  <div class="sh">Shots <span id="shot-count" style="color:var(--text)">0</span></div>
+  <div id="shot-list">
+    <div style="padding:16px 12px;color:var(--muted);font-family:var(--mono);font-size:11px">No shots yet.<br>Upload <b style="color:var(--text)">sh_01_v001.mp4</b></div>
+  </div>
+</aside>
 
-  <!-- MAIN -->
-  <main id="main">
-    <div id="main-content">
+<main id="main">
+  <div id="main-body">
 
-      <!-- PLAYER + CONTROLS -->
-      <div style="flex:1;display:flex;flex-direction:column;overflow:hidden;">
-        <div id="player-area">
-          <div id="player-wrap">
-            <div class="no-shot-placeholder" id="placeholder">
-              <div class="icon">🎬</div>
-              <div style="font-family:var(--mono);font-size:12px;">Select a shot to begin review</div>
-            </div>
-            <video id="video" style="display:none;" preload="auto"></video>
-            <video id="video-preload" style="display:none;position:absolute;pointer-events:none;" preload="auto" muted></video>
-            <canvas id="draw-canvas"></canvas>
-          </div>
-        </div>
-
-        <div id="controls-bar">
-          <!-- Timeline -->
-          <div id="timeline-outer">
-            <div id="timeline-ruler"></div>
-            <div id="timeline-wrap">
-              <div id="timeline-track">
-                <div id="timeline-buffered"></div>
-                <div id="timeline-fill"></div>
-                <div id="comment-markers"></div>
-                <div id="timeline-thumb"></div>
-              </div>
-              <div id="timeline-tooltip">00:00</div>
-            </div>
-          </div>
-
-          <!-- Playback row -->
-          <div id="playback-row">
-            <button class="ctrl-btn" id="btn-prev-shot" title="Previous Shot">⏮</button>
-            <button class="ctrl-btn" id="btn-step-back" title="Step -1s">◀</button>
-            <button class="ctrl-btn" id="btn-play-pause">▶</button>
-            <button class="ctrl-btn" id="btn-step-fwd" title="Step +1s">▶</button>
-            <button class="ctrl-btn" id="btn-next-shot" title="Next Shot">⏭</button>
-            <div id="timecode" class="mono">00:00 / 00:00</div>
-            <div class="playback-spacer"></div>
-            <div id="volume-wrap">🔊 <input type="range" id="volume" min="0" max="1" step="0.05" value="1" /></div>
-            <select id="speed-select">
-              <option value="0.25">0.25×</option>
-              <option value="0.5">0.5×</option>
-              <option value="1" selected>1×</option>
-              <option value="1.5">1.5×</option>
-              <option value="2">2×</option>
-            </select>
-            <button class="ctrl-btn" id="btn-draw" title="Toggle Draw Mode">✏️</button>
-            <button class="ctrl-btn" id="btn-fullscreen" title="Fullscreen">⛶</button>
-          </div>
-
-          <!-- Draw toolbar -->
-          <div id="draw-toolbar">
-            <div class="color-swatch selected" style="background:#f5a623" data-color="#f5a623"></div>
-            <div class="color-swatch" style="background:#f25c5c" data-color="#f25c5c"></div>
-            <div class="color-swatch" style="background:#4f8cff" data-color="#4f8cff"></div>
-            <div class="color-swatch" style="background:#3ecf8e" data-color="#3ecf8e"></div>
-            <div class="color-swatch" style="background:#fff" data-color="#fff"></div>
-            <div class="draw-sep"></div>
-            <input type="range" id="brush-size" min="2" max="24" value="4" title="Brush size" />
-            <div class="draw-sep"></div>
-            <button id="btn-clear-canvas">Clear</button>
-            <button id="btn-save-frame">Save Frame ✓</button>
-          </div>
+    <div style="flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0">
+      <div id="player-area">
+        <div id="player-wrap">
+          <div class="no-shot" id="placeholder"><div class="ic">🎬</div><div style="font-family:var(--mono);font-size:11px">Select a shot to begin</div></div>
+          <video id="video" style="display:none" preload="auto"></video>
+          <video id="video-pre" style="display:none;position:absolute;pointer-events:none" preload="auto" muted></video>
+          <canvas id="ann-canvas"></canvas>
+          <canvas id="draw-canvas"></canvas>
+          <canvas id="prev-canvas" style="pointer-events:none"></canvas>
         </div>
       </div>
 
-      <!-- RIGHT PANEL -->
-      <div id="right-panel">
-        <div class="panel-header">Comments <span class="count" id="comment-count">0</span></div>
-        <div id="comments-list"></div>
-        <div id="comment-input-wrap">
-          <div id="comment-tc-display">@ 00:00</div>
-          <textarea id="comment-input" placeholder="Add a comment at this frame…"></textarea>
-          <button id="btn-add-comment">Add Comment</button>
+      <div id="controls-bar">
+        <div id="tl-outer">
+          <div id="tl-ruler"></div>
+          <div id="tl-track-wrap">
+            <div id="tl-track">
+              <div id="tl-buffered"></div>
+              <div id="tl-played"></div>
+              <div id="tl-markers"></div>
+              <div id="tl-head"></div>
+            </div>
+            <div id="tl-tip">F0</div>
+          </div>
+        </div>
+
+        <div id="pb-row">
+          <button class="cb" id="btn-prev" title="Prev Shot">⏮</button>
+          <button class="cb" id="btn-stepb" title="‹ 1 Frame  (←)">◀</button>
+          <button class="cb" id="btn-pp">▶</button>
+          <button class="cb" id="btn-stepf" title="1 Frame ›  (→)">▶</button>
+          <button class="cb" id="btn-next" title="Next Shot">⏭</button>
+          <div id="timecode">00:00:00 / 00:00:00</div>
+          <div id="framenumber">F0</div>
+          <div class="pb-sp"></div>
+          <div id="vol-wrap">🔊 <input type="range" id="vol" min="0" max="1" step=".05" value="1"/></div>
+          <select id="spd-sel">
+            <option value=".25">.25×</option><option value=".5">.5×</option>
+            <option value="1" selected>1×</option><option value="1.5">1.5×</option>
+            <option value="2">2×</option>
+          </select>
+          <button class="cb" id="btn-draw" title="Draw (D)">✏</button>
+          <button class="cb" id="btn-full" title="Fullscreen">⛶</button>
+        </div>
+
+        <div id="draw-bar">
+          <button class="tbtn-tool active" data-tool="pen" title="Pen (P)">✏</button>
+          <button class="tbtn-tool" data-tool="arrow" title="Arrow (A)">↗</button>
+          <button class="tbtn-tool" data-tool="rect" title="Rectangle (R)">▭</button>
+          <button class="tbtn-tool" data-tool="ellipse" title="Ellipse (E)">◯</button>
+          <button class="tbtn-tool" data-tool="text" title="Text (T)">T</button>
+          <button class="tbtn-tool" data-tool="eraser" title="Eraser (X)">⌫</button>
+          <div class="dsep"></div>
+          <div class="cs sel" style="background:#f5a623" data-color="#f5a623"></div>
+          <div class="cs" style="background:#f05c5c" data-color="#f05c5c"></div>
+          <div class="cs" style="background:#4d8fff" data-color="#4d8fff"></div>
+          <div class="cs" style="background:#3ecf8e" data-color="#3ecf8e"></div>
+          <div class="cs" style="background:#fff" data-color="#fff"></div>
+          <div class="dsep"></div>
+          <span class="db-lbl">Sz</span>
+          <input type="range" id="brush-sz" min="2" max="30" value="4"/>
+          <span class="db-lbl">Op</span>
+          <input type="range" id="opacity-sl" min=".1" max="1" step=".05" value="1"/>
+          <div class="dsep"></div>
+          <button class="da" id="btn-undo">↩</button>
+          <button class="da" id="btn-redo">↪</button>
+          <button class="da danger" id="btn-clear">Clear</button>
+          <button class="da save" id="btn-save-ann">Save ✓</button>
+          <div class="dsep"></div>
+          <button id="btn-toggle-ann">👁 Sketches</button>
         </div>
       </div>
-
     </div>
-  </main>
+
+    <div id="right-panel">
+      <div class="ph">Comments <span class="cnt" id="com-count">0</span></div>
+      <div id="status-bar">
+        <span class="sp-lbl">Status:</span>
+        <button class="sp-btn wip" data-status="wip">WIP</button>
+        <button class="sp-btn review" data-status="review">Review</button>
+        <button class="sp-btn approved" data-status="approved">✓ Approved</button>
+      </div>
+      <div id="clist"></div>
+      <div id="cinput-wrap">
+        <div id="ctc-display">@ F0 — 00:00:00</div>
+        <textarea id="cinput" placeholder="Comment at this frame… (Ctrl+Enter)"></textarea>
+        <button id="btn-addcom">Add Comment</button>
+      </div>
+    </div>
+
+  </div>
+</main>
 </div>
 
-<!-- MODAL -->
-<div id="modal-overlay">
-  <div class="modal-box">
-    <h3 id="modal-title">Edit Comment</h3>
-    <textarea id="modal-input" rows="3" style="resize:none;height:80px;"></textarea>
-    <div class="modal-actions">
-      <button class="btn-cancel" id="modal-cancel">Cancel</button>
-      <button class="btn-confirm" id="modal-confirm">Save</button>
+<div id="modal">
+  <div class="mbox">
+    <h3>Edit Comment</h3>
+    <textarea id="minput"></textarea>
+    <div class="macts">
+      <button class="mcancel" id="mcancel">Cancel</button>
+      <button class="mok" id="mok">Save</button>
     </div>
   </div>
 </div>
-
-<!-- TOAST -->
 <div id="toast"></div>
 
 <script>
-// ─── CONFIG — substitua com suas credenciais do Supabase ──────────────────
-const SUPABASE_URL    = "https://qdnmeuxojubkijpcesry.supabase.co";
-const SUPABASE_ANON   = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFkbm1ldXhvanVia2lqcGNlc3J5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMxNzM2NTAsImV4cCI6MjA4ODc0OTY1MH0.UBnWHTKw3Pw2pMgRHvpReg7sLMHwvGm5EU2kqq8990A";
-const BUCKET          = "videos";
-const EXPORT_SERVICE  = "https://SEU_SERVICO/export-scene"; // URL do container (preencher depois)
-// ─────────────────────────────────────────────────────────────────────────
-
+// ─── CONFIG ────────────────────────────────────────────────────────────────
+const SUPABASE_URL   = "https://qdnmeuxojubkijpcesry.supabase.co";
+const SUPABASE_ANON  = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFkbm1ldXhvanVia2lqcGNlc3J5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMxNzM2NTAsImV4cCI6MjA4ODc0OTY1MH0.UBnWHTKw3Pw2pMgRHvpReg7sLMHwvGm5EU2kqq8990A";
+const BUCKET         = "videos";
+const EXPORT_SVC     = "https://SEU_SERVICO/export-scene";
+const FPS            = 24;
+// ──────────────────────────────────────────────────────────────────────────
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
 
-// ─── STATE ────────────────────────────────────────────────────────────────
-let shots = {};       // { shotKey: { version, path, fileName, url } }
-let shotOrder = [];   // sorted shot keys
-let currentShot = null;
-let isSceneMode = false;
-let sceneIdx = 0;
-let drawMode = false;
-let drawColor = "#f5a623";
-let drawSize = 4;
-let isDrawing = false;
-let lastX = 0, lastY = 0;
-let annotations = {};   // { shotKey: { full: dataURL, frames: { "1.23": dataURL } } }
-let comments = {};      // { shotKey: [ {time, text, id} ] }
-let editingCommentId = null;
+// STATE
+let shots = {}, shotOrder = [], currentShot = null;
+let isSceneMode = false, sceneIdx = 0;
+let annotations = {}; // { key: { frameN: [ stroke, ... ] } }
+let comments    = {}; // { key: [ {id,time,frame,text} ] }
+let statuses    = {}; // { key: 'wip'|'review'|'approved'|null }
+let drawMode = false, drawTool = "pen", drawColor = "#f5a623", drawSize = 4, drawOpacity = 1;
+let isDrawing = false, startX = 0, startY = 0, lastX = 0, lastY = 0;
+let undoStack = [], redoStack = [];
+let showSketches = true;
+let editingId = null;
+let lastFrame = -1;
 
-// ─── DOM refs ─────────────────────────────────────────────────────────────
-const video          = document.getElementById("video");
-const videoPreload   = document.getElementById("video-preload");
-const canvas         = document.getElementById("draw-canvas");
-const ctx            = canvas.getContext("2d");
-const playerWrap     = document.getElementById("player-wrap");
-const placeholder    = document.getElementById("placeholder");
-const timelineFill   = document.getElementById("timeline-fill");
-const timelineThumb  = document.getElementById("timeline-thumb");
-const timelineWrap   = document.getElementById("timeline-wrap");
-const timelineBuffer = document.getElementById("timeline-buffered");
-const timelineRuler  = document.getElementById("timeline-ruler");
-const timelineTip    = document.getElementById("timeline-tooltip");
-const commentMarkers = document.getElementById("comment-markers");
-const timecodeEl     = document.getElementById("timecode");
-const commentTcEl    = document.getElementById("comment-tc-display");
-const commentsList   = document.getElementById("comments-list");
-const commentCount   = document.getElementById("comment-count");
-const commentInput   = document.getElementById("comment-input");
-const shotList       = document.getElementById("shot-list");
-const shotCountEl    = document.getElementById("shot-count");
-const sceneLabel     = document.getElementById("scene-label");
-const sidebarFooter  = document.getElementById("sidebar-footer");
-const uploadProgress = document.getElementById("upload-progress");
-const uploadLabel    = document.getElementById("upload-label");
-const drawToolbar    = document.getElementById("draw-toolbar");
-const toast          = document.getElementById("toast");
-const modalOverlay   = document.getElementById("modal-overlay");
+// DOM
+const video    = document.getElementById("video");
+const videoPre = document.getElementById("video-pre");
+const dCvs     = document.getElementById("draw-canvas"); const dCtx = dCvs.getContext("2d");
+const aCvs     = document.getElementById("ann-canvas");  const aCtx = aCvs.getContext("2d");
+const pCvs     = document.getElementById("prev-canvas"); const pCtx = pCvs.getContext("2d");
+const pw       = document.getElementById("player-wrap");
+const ph       = document.getElementById("placeholder");
+const tlWrap   = document.getElementById("tl-track-wrap");
+const tlTrack  = document.getElementById("tl-track");
+const tlPlayed = document.getElementById("tl-played");
+const tlBuf    = document.getElementById("tl-buffered");
+const tlHead   = document.getElementById("tl-head");
+const tlMk     = document.getElementById("tl-markers");
+const tlRuler  = document.getElementById("tl-ruler");
+const tlTip    = document.getElementById("tl-tip");
+const tcEl     = document.getElementById("timecode");
+const fnEl     = document.getElementById("framenumber");
+const ctcEl    = document.getElementById("ctc-display");
+const clistEl  = document.getElementById("clist");
+const ccntEl   = document.getElementById("com-count");
+const cinput   = document.getElementById("cinput");
+const slEl     = document.getElementById("shot-list");
+const scntEl   = document.getElementById("shot-count");
+const siEl     = document.getElementById("scene-info");
+const drawBar  = document.getElementById("draw-bar");
+const modal    = document.getElementById("modal");
+const toast    = document.getElementById("toast");
 
-// ─── HELPERS ──────────────────────────────────────────────────────────────
-function fmt(t) {
-  if (!isFinite(t)) return "00:00";
-  const m = Math.floor(t / 60), s = Math.floor(t % 60);
-  return `${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`;
+// UTILS
+function fmtTC(t) {
+  if (!isFinite(t)||t<0) return "00:00:00";
+  return [Math.floor(t/3600), Math.floor((t%3600)/60), Math.floor(t%60)].map(n=>String(n).padStart(2,"0")).join(":");
 }
+function toF(t) { return Math.round(t * FPS); }
+function toT(f) { return f / FPS; }
 
-let toastTimer;
-function showToast(msg, type = "") {
-  toast.textContent = msg;
-  toast.className = "show " + type;
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { toast.className = ""; }, 2800);
+let toastT;
+function toast_(msg, type="") {
+  toast.textContent=msg; toast.className="on "+type;
+  clearTimeout(toastT); toastT=setTimeout(()=>toast.className="",2600);
 }
-
-function parseShot(filename, fullPath) {
-  const shotMatch = filename.match(/(sh[_-]?\d+)/i) || fullPath.match(/^(sh[_-]?\d+)/i);
-  const verMatch  = filename.match(/_v0*(\d+)/i) || filename.match(/v0*(\d+)/i);
-  if (!shotMatch || !verMatch) return null;
-  return {
-    shotKey: shotMatch[1].toUpperCase().replace(/[_-]/, ""),
-    version: parseInt(verMatch[1], 10),
-  };
+function esc(s){ return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+function parseShot(fn, fp) {
+  const sm=fn.match(/(sh[_-]?\d+)/i)||(fp||"").match(/^(sh[_-]?\d+)/i);
+  const vm=fn.match(/_v0*(\d+)/i)||fn.match(/v0*(\d+)/i);
+  if(!sm||!vm) return null;
+  return { shotKey:sm[1].toUpperCase().replace(/[_-]/,""), version:parseInt(vm[1],10) };
 }
+function pubUrl(p){ return `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/${p.split("/").map(encodeURIComponent).join("/")}`; }
+function annPath(k){ return `annotations/${k}_ann3.json`; }
+function comPath(k){ return `annotations/${k}_comments.json`; }
 
-function publicUrl(path) {
-  return `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/${path.split("/").map(encodeURIComponent).join("/")}`;
-}
-
-// ─── LOAD SHOTS FROM SUPABASE ─────────────────────────────────────────────
+// LOAD SHOTS
 async function loadShots() {
-  const { data, error } = await sb.storage.from(BUCKET).list("", { limit: 500 });
-  if (error) { showToast("Failed to load shots: " + error.message, "err"); return; }
-
-  shots = {};
-  for (const entry of data) {
-    const name = entry.name;
-    if (/\.(mov|mp4|m4v|webm)$/i.test(name)) {
-      processEntry(name, name);
-    } else if (entry.metadata == null) {
-      // It's a folder
-      const { data: inner } = await sb.storage.from(BUCKET).list(name, { limit: 500 });
-      if (inner) inner.forEach(f => processEntry(f.name, `${name}/${f.name}`));
+  const {data,error}=await sb.storage.from(BUCKET).list("",{limit:500});
+  if(error){toast_("Load error: "+error.message,"err");return;}
+  shots={};
+  for(const e of data){
+    if(/\.(mov|mp4|m4v|webm)$/i.test(e.name)) procEntry(e.name,e.name);
+    else if(e.metadata==null){
+      const {data:inner}=await sb.storage.from(BUCKET).list(e.name,{limit:500});
+      if(inner) inner.forEach(f=>procEntry(f.name,`${e.name}/${f.name}`));
     }
   }
-
-  shotOrder = Object.keys(shots).sort((a, b) =>
-    parseInt(a.replace(/\D/g,"") || 0) - parseInt(b.replace(/\D/g,"") || 0)
-  );
+  shotOrder=Object.keys(shots).sort((a,b)=>parseInt(a.replace(/\D/g,"")||0)-parseInt(b.replace(/\D/g,"")||0));
   renderShotList();
 }
-
-function processEntry(filename, path) {
-  if (!/\.(mov|mp4|m4v|webm)$/i.test(filename)) return;
-  const parsed = parseShot(filename, path);
-  if (!parsed) return;
-  const { shotKey, version } = parsed;
-  if (!shots[shotKey] || shots[shotKey].version < version) {
-    shots[shotKey] = { version, path, fileName: filename, url: publicUrl(path) };
-  }
+function procEntry(fn,path){
+  if(!/\.(mov|mp4|m4v|webm)$/i.test(fn)) return;
+  const p=parseShot(fn,path); if(!p) return;
+  const {shotKey,version}=p;
+  if(!shots[shotKey]||shots[shotKey].version<version)
+    shots[shotKey]={version,path,fileName:fn,url:pubUrl(path)};
 }
 
-// ─── RENDER SHOT LIST ─────────────────────────────────────────────────────
-function renderShotList() {
-  shotCountEl.textContent = shotOrder.length;
-  sceneLabel.textContent = shotOrder.length ? `Scene — ${shotOrder.length} shot${shotOrder.length > 1 ? "s" : ""}` : "— no scene —";
-
-  if (!shotOrder.length) {
-    shotList.innerHTML = `<div style="padding:20px 14px;color:var(--muted);font-family:var(--mono);font-size:11px;">No shots yet.<br>Upload a file like<br><b style="color:var(--text)">sh_01_v001.mp4</b></div>`;
+// SHOT LIST
+function renderShotList(){
+  scntEl.textContent=shotOrder.length;
+  siEl.textContent=shotOrder.length?`${shotOrder.length} shot${shotOrder.length>1?"s":""}`:"—";
+  if(!shotOrder.length){
+    slEl.innerHTML=`<div style="padding:16px 12px;color:var(--muted);font-family:var(--mono);font-size:11px">No shots yet.<br>Upload <b style="color:var(--text)">sh_01_v001.mp4</b></div>`;
     return;
   }
-
-  shotList.innerHTML = "";
-  shotOrder.forEach(key => {
-    const s = shots[key];
-    const coms = comments[key] || [];
-    const item = document.createElement("div");
-    item.className = "shot-item" + (key === currentShot ? " active" : "");
-    item.dataset.key = key;
-
-    const thumb = document.createElement("div");
-    thumb.className = "shot-thumb-placeholder";
-    thumb.textContent = "🎥";
-    thumb.style.fontSize = "14px";
-
-    const info = document.createElement("div");
-    info.className = "shot-info";
-    info.innerHTML = `<div class="shot-name">${key}</div><div class="shot-version">v${String(s.version).padStart(3,"0")}</div>${coms.length ? `<div class="shot-comment-count">💬 ${coms.length}</div>` : ""}`;
-
-    item.appendChild(thumb);
-    item.appendChild(info);
-    item.addEventListener("click", () => loadShot(key));
-    shotList.appendChild(item);
+  slEl.innerHTML="";
+  shotOrder.forEach(key=>{
+    const s=shots[key], coms=(comments[key]||[]).length, st=statuses[key];
+    const item=document.createElement("div");
+    item.className="shot-item"+(key===currentShot?" active":"");
+    const tw=document.createElement("div"); tw.className="shot-thumb-wrap";
+    const tc=document.createElement("canvas"); tc.width=54; tc.height=32;
+    tw.appendChild(tc); genThumb(s.url,tc);
+    const stHtml=st===("approved")?`<span class="shot-status s-approved">✓ Approved</span>`:st===("review")?`<span class="shot-status s-review">● Review</span>`:st===("wip")?`<span class="shot-status s-wip">◌ WIP</span>`:"";
+    const info=document.createElement("div"); info.className="shot-info";
+    info.innerHTML=`<div class="shot-name">${key}</div><div class="shot-ver">v${String(s.version).padStart(3,"0")}</div>${coms?`<div class="shot-coms">💬 ${coms}</div>`:""}${stHtml}`;
+    item.appendChild(tw); item.appendChild(info);
+    item.addEventListener("click",()=>loadShot(key));
+    slEl.appendChild(item);
   });
 }
-
-// ─── LOAD A SHOT ─────────────────────────────────────────────────────────
-async function loadShot(key) {
-  if (!shots[key]) return;
-  currentShot = key;
-  isSceneMode = false;
-
-  placeholder.style.display = "none";
-  video.style.display = "block";
-  video.src = shots[key].url;
-  video.load();
-
-  await loadAnnotations(key);
-  await loadComments(key);
-
-  renderShotList();
-  renderComments();
-  updateTimecode();
-  updateCommentTc();
-  renderMarkers();
+function genThumb(url,cnv){
+  const v=document.createElement("video"); v.preload="metadata"; v.muted=true; v.src=url;
+  v.addEventListener("loadeddata",()=>{ v.currentTime=0.1; });
+  v.addEventListener("seeked",()=>{ cnv.getContext("2d").drawImage(v,0,0,cnv.width,cnv.height); v.src=""; },{once:true});
 }
 
-// ─── VIDEO EVENTS ────────────────────────────────────────────────────────
-video.addEventListener("timeupdate", () => {
-  updateTimeline();
-  updateTimecode();
-  updateCommentTc();
-  syncCanvasAnnotation();
+// LOAD SHOT
+async function loadShot(key,autoplay=false){
+  if(!shots[key]) return;
+  currentShot=key; isSceneMode=autoplay?isSceneMode:false;
+  ph.style.display="none"; video.style.display="block";
+  video.src=shots[key].url; video.load();
+  if(autoplay) video.play().catch(()=>{});
+  undoStack=[]; redoStack=[]; lastFrame=-1;
+  await Promise.all([loadAnn(key),loadCom(key)]);
+  renderShotList(); renderComments(); renderMarkers(); updateStatusPicker(); updateTC();
+}
+
+// VIDEO EVENTS
+video.addEventListener("loadedmetadata",()=>{ sizeCanvases(); buildRuler(); renderMarkers(); updateTC(); });
+video.addEventListener("play", updatePP);
+video.addEventListener("pause", updatePP);
+video.addEventListener("ended",()=>{
+  if(isSceneMode){ sceneIdx++; sceneIdx<shotOrder.length?loadSceneShot(sceneIdx):(isSceneMode=false,updatePP()); }
+  updatePP();
+});
+function updatePP(){ document.getElementById("btn-pp").textContent=video.paused?"▶":"⏸"; }
+
+// RAF loop — smooth scrub & annotation overlay
+requestAnimationFrame(function loop(){
+  // timeline
+  const ct=video.currentTime, dur=video.duration||0;
+  const pct=dur?(ct/dur)*100:0;
+  tlPlayed.style.width=pct+"%";
+  tlHead.style.left=pct+"%";
+  if(video.buffered.length) tlBuf.style.width=(dur?(video.buffered.end(video.buffered.length-1)/dur*100):0)+"%";
+  // timecode
+  const f=toF(ct);
+  tcEl.textContent=`${fmtTC(ct)} / ${fmtTC(dur)}`;
+  fnEl.textContent=`F${f}`;
+  ctcEl.textContent=`@ F${f} — ${fmtTC(ct)}`;
+  // annotation overlay
+  if(f!==lastFrame){ lastFrame=f; renderAnnOverlay(f); }
+  requestAnimationFrame(loop);
 });
 
-video.addEventListener("loadedmetadata", () => {
-  sizeCanvas();
-  updateTimecode();
-});
-
-video.addEventListener("play",  updatePlayBtn);
-video.addEventListener("pause", updatePlayBtn);
-
-function updateCommentTc() {
-  commentTcEl.textContent = `@ ${fmt(video.currentTime)}`;
+function renderAnnOverlay(f){
+  aCtx.clearRect(0,0,aCvs.width,aCvs.height);
+  if(!showSketches||!currentShot) return;
+  const strokes=(annotations[currentShot]||{})[f]||[];
+  strokes.forEach(s=>drawStroke(aCtx,s,aCvs.width,aCvs.height));
 }
 
-function updatePlayBtn() {
-  document.getElementById("btn-play-pause").textContent = video.paused ? "▶" : "⏸";
-}
-
-function updateTimecode() {
-  timecodeEl.textContent = `${fmt(video.currentTime)} / ${fmt(video.duration)}`;
-}
-
-function updateTimeline() {
-  const pct = video.duration ? (video.currentTime / video.duration) * 100 : 0;
-  timelineFill.style.width = pct + "%";
-  timelineThumb.style.left = pct + "%";
-  // buffered
-  if (video.buffered.length > 0 && video.duration) {
-    const bEnd = video.buffered.end(video.buffered.length - 1);
-    timelineBuffer.style.width = (bEnd / video.duration * 100) + "%";
-  }
-}
-
-// ─── RULER ────────────────────────────────────────────────────────────────
-function buildRuler() {
-  timelineRuler.innerHTML = "";
-  const dur = video.duration;
-  if (!dur || !isFinite(dur)) return;
-  const w = timelineRuler.getBoundingClientRect().width;
-  if (!w) return;
-
-  // Choose interval: aim for ~60-80px between major ticks
-  const intervals = [1, 2, 5, 10, 15, 30, 60, 120, 300];
-  let interval = intervals.find(i => (i / dur) * w >= 55) || 300;
-  const minorInterval = interval <= 5 ? 1 : interval <= 30 ? 5 : 10;
-
-  for (let t = 0; t <= dur; t += minorInterval) {
-    const pct = (t / dur) * 100;
-    const isMajor = t % interval === 0;
-    const tick = document.createElement("div");
-    tick.className = "ruler-tick " + (isMajor ? "major" : "minor");
-    tick.style.left = pct + "%";
-    timelineRuler.appendChild(tick);
-    if (isMajor) {
-      const label = document.createElement("div");
-      label.className = "ruler-label";
-      label.style.left = pct + "%";
-      label.textContent = fmt(t);
-      timelineRuler.appendChild(label);
-    }
-  }
-}
-
-video.addEventListener("loadedmetadata", buildRuler);
-new ResizeObserver(buildRuler).observe(timelineRuler);
-
-// ─── TIMELINE SCRUB + TOOLTIP ────────────────────────────────────────────
-let scrubbing = false;
-
-function scrubTo(e) {
-  const rect = timelineWrap.getBoundingClientRect();
-  const x = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
-  const pct = x / rect.width;
-  // Update tooltip
-  if (video.duration) {
-    timelineTip.textContent = fmt(pct * video.duration);
-    timelineTip.style.left = (pct * 100) + "%";
-    if (scrubbing) video.currentTime = pct * video.duration;
-  }
-}
-
-timelineWrap.addEventListener("mousedown", e => { scrubbing = true; scrubTo(e); video.currentTime = (Math.max(0, Math.min(e.clientX - timelineWrap.getBoundingClientRect().left, timelineWrap.getBoundingClientRect().width)) / timelineWrap.getBoundingClientRect().width) * (video.duration || 0); });
-timelineWrap.addEventListener("mousemove", scrubTo);
-document.addEventListener("mousemove", e => { if (scrubbing) scrubTo(e); });
-document.addEventListener("mouseup", () => { scrubbing = false; });
-
-// ─── MARKERS ─────────────────────────────────────────────────────────────
-function renderMarkers() {
-  commentMarkers.innerHTML = "";
-  if (!currentShot || !video.duration) return;
-  (comments[currentShot] || []).forEach(c => {
-    const pct = (c.time / video.duration) * 100;
-    const m = document.createElement("div");
-    m.className = "comment-marker";
-    m.style.left = pct + "%";
-    m.title = `${fmt(c.time)}: ${c.text.slice(0,40)}`;
-    m.addEventListener("click", e => { e.stopPropagation(); video.currentTime = c.time; highlightComment(c.id); });
-    commentMarkers.appendChild(m);
+// CANVAS SIZING
+function sizeCanvases(){
+  const vr=video.getBoundingClientRect(), pr=pw.getBoundingClientRect();
+  const ox=vr.left-pr.left, oy=vr.top-pr.top;
+  [dCvs,aCvs,pCvs].forEach(c=>{
+    c.width=vr.width; c.height=vr.height;
+    c.style.cssText+=`;width:${vr.width}px;height:${vr.height}px;left:${ox}px;top:${oy}px`;
   });
 }
+new ResizeObserver(sizeCanvases).observe(pw);
 
-video.addEventListener("loadedmetadata", renderMarkers);
-
-// ─── CONTROLS ────────────────────────────────────────────────────────────
-document.getElementById("btn-play-pause").addEventListener("click", () => {
-  video.paused ? video.play() : video.pause();
-});
-document.getElementById("btn-step-back").addEventListener("click", () => { video.currentTime = Math.max(0, video.currentTime - 1); });
-document.getElementById("btn-step-fwd").addEventListener("click",  () => { video.currentTime = Math.min(video.duration || 0, video.currentTime + 1); });
-document.getElementById("btn-prev-shot").addEventListener("click", () => prevNextShot(-1));
-document.getElementById("btn-next-shot").addEventListener("click", () => prevNextShot(1));
-document.getElementById("volume").addEventListener("input", e => { video.volume = e.target.value; });
-document.getElementById("speed-select").addEventListener("change", e => { video.playbackRate = parseFloat(e.target.value); });
-document.getElementById("btn-fullscreen").addEventListener("click", () => { playerWrap.requestFullscreen?.() || playerWrap.webkitRequestFullscreen?.(); });
-
-function prevNextShot(dir) {
-  if (!currentShot) return;
-  const idx = shotOrder.indexOf(currentShot);
-  const next = shotOrder[idx + dir];
-  if (next) loadShot(next);
-}
-
-// Keyboard shortcuts
-document.addEventListener("keydown", e => {
-  if (e.target.tagName === "TEXTAREA" || e.target.tagName === "INPUT") return;
-  if (e.code === "Space") { e.preventDefault(); video.paused ? video.play() : video.pause(); }
-  if (e.code === "ArrowLeft")  video.currentTime = Math.max(0, video.currentTime - (e.shiftKey ? 5 : 1));
-  if (e.code === "ArrowRight") video.currentTime = Math.min(video.duration||0, video.currentTime + (e.shiftKey ? 5 : 1));
-  if (e.code === "KeyD") document.getElementById("btn-draw").click();
-});
-
-// ─── PLAY SCENE (double-buffer — zero black frame) ───────────────────────
-document.getElementById("btn-play-scene").addEventListener("click", () => {
-  if (!shotOrder.length) return;
-  isSceneMode = true;
-  sceneIdx = 0;
-  startSceneFrom(0);
-});
-
-function startSceneFrom(idx) {
-  const key = shotOrder[idx];
-  if (!key) return;
-  currentShot = key;
-  placeholder.style.display = "none";
-  video.style.display = "block";
-  video.src = shots[key].url;
-  video.load();
-  video.play().catch(() => {});
-  preloadNext(idx + 1);
-  loadAnnotations(key).then(() => loadComments(key).then(() => {
-    renderShotList(); renderComments(); renderMarkers();
-  }));
-}
-
-function preloadNext(idx) {
-  const key = shotOrder[idx];
-  if (!key) { videoPreload.src = ""; return; }
-  videoPreload.src = shots[key].url;
-  videoPreload.load();
-}
-
-// Override the ended handler to use preloaded video (swap src instantly)
-video.addEventListener("ended", () => {
-  if (isSceneMode) {
-    sceneIdx++;
-    if (sceneIdx < shotOrder.length) {
-      const key = shotOrder[sceneIdx];
-      currentShot = key;
-      // If preload has same src and is ready, swap instantly
-      if (videoPreload.src === shots[key].url && videoPreload.readyState >= 2) {
-        video.src = videoPreload.src;
-        video.currentTime = 0;
-        video.play().catch(() => {});
-      } else {
-        // fallback — just set src normally
-        video.src = shots[key].url;
-        video.load();
-        video.play().catch(() => {});
-      }
-      preloadNext(sceneIdx + 1);
-      loadAnnotations(key).then(() => loadComments(key).then(() => {
-        renderShotList(); renderComments(); renderMarkers();
-      }));
-    } else {
-      isSceneMode = false;
-      updatePlayBtn();
-    }
+// DRAW STROKE (normalised coords 0-1)
+function drawStroke(ctx,s,W,H){
+  ctx.save();
+  ctx.globalAlpha=s.opacity||1;
+  ctx.strokeStyle=s.color; ctx.fillStyle=s.color;
+  ctx.lineWidth=s.size; ctx.lineCap="round"; ctx.lineJoin="round";
+  if(s.type==="pen"&&s.pts&&s.pts.length>1){
+    ctx.beginPath(); ctx.moveTo(s.pts[0][0]*W,s.pts[0][1]*H);
+    for(let i=1;i<s.pts.length;i++) ctx.lineTo(s.pts[i][0]*W,s.pts[i][1]*H);
+    ctx.stroke();
+  } else if(s.type==="arrow"&&s.pts){
+    arrow(ctx,s.pts[0][0]*W,s.pts[0][1]*H,s.pts[1][0]*W,s.pts[1][1]*H,s.size);
+  } else if(s.type==="rect"&&s.pts){
+    ctx.strokeRect(s.pts[0][0]*W,s.pts[0][1]*H,(s.pts[1][0]-s.pts[0][0])*W,(s.pts[1][1]-s.pts[0][1])*H);
+  } else if(s.type==="ellipse"&&s.pts){
+    const cx=(s.pts[0][0]+s.pts[1][0])/2*W, cy=(s.pts[0][1]+s.pts[1][1])/2*H;
+    const rx=Math.abs(s.pts[1][0]-s.pts[0][0])/2*W, ry=Math.abs(s.pts[1][1]-s.pts[0][1])/2*H;
+    ctx.beginPath(); ctx.ellipse(cx,cy,rx||1,ry||1,0,0,Math.PI*2); ctx.stroke();
+  } else if(s.type==="text"&&s.pts&&s.text){
+    ctx.font=`${Math.max(12,s.size*3)}px sans-serif`;
+    ctx.fillText(s.text,s.pts[0][0]*W,s.pts[0][1]*H);
   }
-  updatePlayBtn();
-});
-
-// ─── EXPORT SCENE ────────────────────────────────────────────────────────
-document.getElementById("btn-export").addEventListener("click", async () => {
-  if (!EXPORT_SERVICE || EXPORT_SERVICE.includes("YOUR_EXPORT")) {
-    showToast("Export service URL not configured.", "err"); return;
-  }
-  showToast("Exporting… this may take a minute.", "");
-  try {
-    const res = await fetch(EXPORT_SERVICE, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ shots: shotOrder }),
-    });
-    const json = await res.json();
-    if (json.ok) {
-      showToast("Export ready!", "ok");
-      window.open(json.url, "_blank");
-    } else {
-      showToast("Export error: " + json.error, "err");
-    }
-  } catch (e) {
-    showToast("Export failed: " + e.message, "err");
-  }
-});
-
-// ─── UPLOAD ───────────────────────────────────────────────────────────────
-document.getElementById("file-input").addEventListener("change", async e => {
-  const files = Array.from(e.target.files);
-  if (!files.length) return;
-  uploadProgress.style.display = "flex";
-
-  for (let i = 0; i < files.length; i++) {
-    const file = files[i];
-    uploadLabel.textContent = `Uploading ${i+1}/${files.length}: ${file.name}`;
-    const parsed = parseShot(file.name, file.name);
-    if (!parsed) { showToast(`Skipped: ${file.name} — name format not recognized`, "err"); continue; }
-    const { shotKey, version } = parsed;
-    const remotePath = `${shotKey}/${file.name}`;
-    const { error } = await sb.storage.from(BUCKET).upload(remotePath, file, { upsert: true });
-    if (error) { showToast("Upload failed: " + error.message, "err"); }
-    else { showToast(`Uploaded: ${file.name}`, "ok"); }
-  }
-
-  uploadProgress.style.display = "none";
-  e.target.value = "";
-  await loadShots();
-});
-
-// ─── DRAW ────────────────────────────────────────────────────────────────
-document.getElementById("btn-draw").addEventListener("click", () => {
-  drawMode = !drawMode;
-  document.getElementById("btn-draw").classList.toggle("active", drawMode);
-  playerWrap.classList.toggle("draw-mode", drawMode);
-  drawToolbar.classList.toggle("visible", drawMode);
-  if (drawMode) { video.pause(); restoreFrameAnnotation(); }
-});
-
-document.querySelectorAll(".color-swatch").forEach(sw => {
-  sw.addEventListener("click", () => {
-    document.querySelectorAll(".color-swatch").forEach(s => s.classList.remove("selected"));
-    sw.classList.add("selected");
-    drawColor = sw.dataset.color;
-  });
-});
-
-document.getElementById("brush-size").addEventListener("input", e => { drawSize = parseInt(e.target.value); });
-
-function sizeCanvas() {
-  const vr = video.getBoundingClientRect();
-  canvas.width  = vr.width;
-  canvas.height = vr.height;
-  canvas.style.width  = vr.width + "px";
-  canvas.style.height = vr.height + "px";
-  canvas.style.left = (vr.left - playerWrap.getBoundingClientRect().left) + "px";
-  canvas.style.top  = (vr.top  - playerWrap.getBoundingClientRect().top)  + "px";
+  ctx.restore();
 }
-
-new ResizeObserver(sizeCanvas).observe(playerWrap);
-
-canvas.addEventListener("pointerdown", e => {
-  if (!drawMode) return;
-  isDrawing = true;
-  const {x, y} = canvasXY(e);
-  lastX = x; lastY = y;
+function arrow(ctx,x1,y1,x2,y2,sz){
+  const ang=Math.atan2(y2-y1,x2-x1), hl=Math.max(12,sz*4);
+  ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
   ctx.beginPath();
-  ctx.arc(x, y, drawSize / 2, 0, Math.PI * 2);
-  ctx.fillStyle = drawColor;
-  ctx.fill();
-});
-canvas.addEventListener("pointermove", e => {
-  if (!isDrawing) return;
-  const {x, y} = canvasXY(e);
-  ctx.beginPath();
-  ctx.moveTo(lastX, lastY);
-  ctx.lineTo(x, y);
-  ctx.strokeStyle = drawColor;
-  ctx.lineWidth = drawSize;
-  ctx.lineCap = "round";
-  ctx.stroke();
-  lastX = x; lastY = y;
-});
-canvas.addEventListener("pointerup", () => { isDrawing = false; });
-
-function canvasXY(e) {
-  const rect = canvas.getBoundingClientRect();
-  return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  ctx.moveTo(x2,y2);
+  ctx.lineTo(x2-hl*Math.cos(ang-.4),y2-hl*Math.sin(ang-.4));
+  ctx.lineTo(x2-hl*Math.cos(ang+.4),y2-hl*Math.sin(ang+.4));
+  ctx.closePath(); ctx.fill();
 }
 
-document.getElementById("btn-clear-canvas").addEventListener("click", () => {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+// Redraw draw canvas from stored strokes for current frame
+function redrawDraw(){
+  dCtx.clearRect(0,0,dCvs.width,dCvs.height);
+  if(!currentShot) return;
+  const f=toF(video.currentTime);
+  const strokes=(annotations[currentShot]||{})[f]||[];
+  strokes.forEach(s=>drawStroke(dCtx,s,dCvs.width,dCvs.height));
+}
+
+// XY normalised
+function cvXY(e){ const r=dCvs.getBoundingClientRect(); return [(e.clientX-r.left)/r.width,(e.clientY-r.top)/r.height]; }
+let currentPts=[];
+
+dCvs.addEventListener("pointerdown",e=>{
+  if(!drawMode) return;
+  isDrawing=true; const [nx,ny]=cvXY(e); startX=nx; startY=ny; lastX=nx; lastY=ny; currentPts=[[nx,ny]];
+  if(drawTool==="text"){
+    isDrawing=false;
+    const txt=prompt("Enter annotation text:");
+    if(txt) pushStroke({type:"text",pts:[[nx,ny]],text:txt,color:drawColor,size:drawSize,opacity:drawOpacity});
+  } else if(drawTool==="pen"){
+    dCtx.beginPath(); dCtx.arc(nx*dCvs.width,ny*dCvs.height,drawSize/2,0,Math.PI*2);
+    dCtx.fillStyle=drawColor; dCtx.globalAlpha=drawOpacity; dCtx.fill();
+  }
+});
+dCvs.addEventListener("pointermove",e=>{
+  if(!isDrawing||!drawMode) return;
+  const [nx,ny]=cvXY(e);
+  const x=nx*dCvs.width, y=ny*dCvs.height;
+  if(drawTool==="pen"){
+    currentPts.push([nx,ny]);
+    dCtx.save(); dCtx.beginPath();
+    dCtx.moveTo(lastX*dCvs.width,lastY*dCvs.height); dCtx.lineTo(x,y);
+    dCtx.strokeStyle=drawColor; dCtx.lineWidth=drawSize; dCtx.lineCap="round"; dCtx.globalAlpha=drawOpacity;
+    dCtx.stroke(); dCtx.restore();
+  } else if(drawTool==="eraser"){
+    dCtx.save(); dCtx.globalCompositeOperation="destination-out";
+    dCtx.beginPath(); dCtx.arc(x,y,drawSize*2.5,0,Math.PI*2); dCtx.fill();
+    dCtx.restore();
+  } else {
+    // shape preview
+    pCtx.clearRect(0,0,pCvs.width,pCvs.height);
+    pCtx.save(); pCtx.strokeStyle=drawColor; pCtx.fillStyle=drawColor;
+    pCtx.lineWidth=drawSize; pCtx.lineCap="round"; pCtx.globalAlpha=drawOpacity;
+    const sx=startX*pCvs.width,sy=startY*pCvs.height;
+    if(drawTool==="arrow") arrow(pCtx,sx,sy,x,y,drawSize);
+    else if(drawTool==="rect") pCtx.strokeRect(sx,sy,x-sx,y-sy);
+    else if(drawTool==="ellipse"){
+      const cx=(sx+x)/2,cy=(sy+y)/2,rx=Math.abs(x-sx)/2,ry=Math.abs(y-sy)/2;
+      pCtx.beginPath(); pCtx.ellipse(cx,cy,rx||1,ry||1,0,0,Math.PI*2); pCtx.stroke();
+    }
+    pCtx.restore();
+  }
+  lastX=nx; lastY=ny;
+});
+dCvs.addEventListener("pointerup",e=>{
+  if(!isDrawing) return; isDrawing=false;
+  pCtx.clearRect(0,0,pCvs.width,pCvs.height);
+  const [nx,ny]=cvXY(e);
+  if(drawTool==="pen") pushStroke({type:"pen",pts:currentPts,color:drawColor,size:drawSize,opacity:drawOpacity});
+  else if(drawTool!=="eraser"&&drawTool!=="text")
+    pushStroke({type:drawTool,pts:[[startX,startY],[nx,ny]],color:drawColor,size:drawSize,opacity:drawOpacity});
+  else if(drawTool==="eraser"){ /* eraser already applied on move — snap current canvas to avoid undo confusion */ }
 });
 
-document.getElementById("btn-save-frame").addEventListener("click", async () => {
-  if (!currentShot) return;
-  const frameKey = video.currentTime.toFixed(2);
-  if (!annotations[currentShot]) annotations[currentShot] = { frames: {} };
-  annotations[currentShot].frames[frameKey] = canvas.toDataURL();
-  await saveAnnotations(currentShot);
-  showToast("Frame annotation saved ✓", "ok");
+function pushStroke(s){
+  if(!currentShot) return;
+  const f=toF(video.currentTime);
+  if(!annotations[currentShot]) annotations[currentShot]={};
+  const before=JSON.parse(JSON.stringify(annotations[currentShot][f]||[]));
+  undoStack.push({frame:f,before}); redoStack=[];
+  if(!annotations[currentShot][f]) annotations[currentShot][f]=[];
+  annotations[currentShot][f].push(s);
+  redrawDraw(); renderMarkers(); lastFrame=-1;
+}
+
+// UNDO/REDO
+function undo(){
+  if(!undoStack.length||!currentShot) return;
+  const e=undoStack.pop(); const f=e.frame;
+  redoStack.push({frame:f,strokes:JSON.parse(JSON.stringify(annotations[currentShot][f]||[]))});
+  annotations[currentShot][f]=e.before||[];
+  redrawDraw(); renderMarkers(); lastFrame=-1;
+}
+function redo(){
+  if(!redoStack.length||!currentShot) return;
+  const e=redoStack.pop(); const f=e.frame;
+  undoStack.push({frame:f,before:JSON.parse(JSON.stringify(annotations[currentShot][f]||[]))});
+  annotations[currentShot][f]=e.strokes||[];
+  redrawDraw(); renderMarkers(); lastFrame=-1;
+}
+
+document.getElementById("btn-undo").addEventListener("click",undo);
+document.getElementById("btn-redo").addEventListener("click",redo);
+document.getElementById("btn-clear").addEventListener("click",()=>{
+  if(!currentShot) return;
+  const f=toF(video.currentTime);
+  if(!annotations[currentShot]) annotations[currentShot]={};
+  undoStack.push({frame:f,before:JSON.parse(JSON.stringify(annotations[currentShot][f]||[]))});
+  redoStack=[]; annotations[currentShot][f]=[];
+  dCtx.clearRect(0,0,dCvs.width,dCvs.height); renderMarkers(); lastFrame=-1;
+});
+document.getElementById("btn-save-ann").addEventListener("click",async()=>{
+  if(!currentShot) return;
+  await saveAnn(currentShot); renderMarkers(); lastFrame=-1;
+  toast_("Sketches saved ✓","ok");
+});
+document.getElementById("btn-toggle-ann").addEventListener("click",function(){
+  showSketches=!showSketches;
+  this.className=showSketches?"":"off";
+  this.textContent=(showSketches?"👁":"🚫")+" Sketches";
+  if(!showSketches) aCtx.clearRect(0,0,aCvs.width,aCvs.height);
+  lastFrame=-1;
 });
 
-function restoreFrameAnnotation() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  if (!currentShot) return;
-  const frameKey = video.currentTime.toFixed(2);
-  const img64 = annotations[currentShot]?.frames?.[frameKey];
-  if (img64) {
-    const img = new Image();
-    img.onload = () => ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-    img.src = img64;
+// DRAW TOGGLE
+document.getElementById("btn-draw").addEventListener("click",()=>{
+  drawMode=!drawMode;
+  document.getElementById("btn-draw").classList.toggle("active",drawMode);
+  pw.classList.toggle("draw-mode",drawMode);
+  drawBar.classList.toggle("on",drawMode);
+  if(drawMode){ video.pause(); redrawDraw(); }
+  else { dCtx.clearRect(0,0,dCvs.width,dCvs.height); lastFrame=-1; }
+});
+
+// TOOL SELECTION
+document.querySelectorAll("[data-tool]").forEach(btn=>{
+  btn.addEventListener("click",()=>{
+    document.querySelectorAll("[data-tool]").forEach(b=>b.classList.remove("active"));
+    btn.classList.add("active"); drawTool=btn.dataset.tool;
+    dCvs.style.cursor=drawTool==="eraser"?"cell":drawTool==="text"?"text":"crosshair";
+  });
+});
+document.querySelectorAll(".cs").forEach(sw=>{
+  sw.addEventListener("click",()=>{ document.querySelectorAll(".cs").forEach(s=>s.classList.remove("sel")); sw.classList.add("sel"); drawColor=sw.dataset.color; });
+});
+document.getElementById("brush-sz").addEventListener("input",e=>drawSize=parseInt(e.target.value));
+document.getElementById("opacity-sl").addEventListener("input",e=>drawOpacity=parseFloat(e.target.value));
+
+// RULER
+function buildRuler(){
+  tlRuler.innerHTML=""; const dur=video.duration; if(!dur||!isFinite(dur)) return;
+  const w=tlRuler.getBoundingClientRect().width; if(!w) return;
+  const totalF=Math.floor(dur*FPS), pxPF=w/totalF;
+  let maj=1; for(const s of [1,2,5,10,24,48,100,240,500,1000]){ if(s*pxPF>=65){maj=s;break;} }
+  const min=maj<=2?1:maj<=10?Math.max(1,Math.floor(maj/5)):Math.max(1,Math.floor(maj/4));
+  for(let f=0;f<=totalF;f+=min){
+    const pct=(f/totalF)*100, isMaj=f%maj===0;
+    const t=document.createElement("div"); t.className="rl-tick "+(isMaj?"major":"minor"); t.style.left=pct+"%";
+    tlRuler.appendChild(t);
+    if(isMaj){ const l=document.createElement("div"); l.className="rl-label"; l.style.left=pct+"%"; l.textContent=`F${f}`; tlRuler.appendChild(l); }
   }
 }
+new ResizeObserver(buildRuler).observe(tlRuler);
 
-function syncCanvasAnnotation() {
-  if (!drawMode) return;
-  restoreFrameAnnotation();
-}
+// SCRUB — smooth, no lag
+let scrubbing=false;
+function pctFromE(e){ const r=tlWrap.getBoundingClientRect(); return Math.max(0,Math.min((e.clientX-r.left)/r.width,1)); }
+tlWrap.addEventListener("mousedown",e=>{
+  scrubbing=true; const p=pctFromE(e); if(video.duration) video.currentTime=p*video.duration;
+});
+tlWrap.addEventListener("mousemove",e=>{
+  const p=pctFromE(e);
+  if(video.duration){ tlTip.textContent=`F${toF(p*video.duration)} — ${fmtTC(p*video.duration)}`; tlTip.style.left=(p*100)+"%"; }
+  if(scrubbing&&video.duration) video.currentTime=p*video.duration;
+});
+document.addEventListener("mousemove",e=>{ if(scrubbing&&video.duration) video.currentTime=pctFromE(e)*video.duration; });
+document.addEventListener("mouseup",()=>scrubbing=false);
 
-// ─── ANNOTATIONS (Supabase Storage) ──────────────────────────────────────
-function annotationsPath(key) {
-  return `annotations/${key}_annotations.json`;
-}
-
-async function loadAnnotations(key) {
-  try {
-    const url = publicUrl(annotationsPath(key));
-    const res = await fetch(url);
-    if (res.ok) annotations[key] = await res.json();
-    else annotations[key] = { frames: {} };
-  } catch { annotations[key] = { frames: {} }; }
-}
-
-async function saveAnnotations(key) {
-  const blob = new Blob([JSON.stringify(annotations[key])], { type: "application/json" });
-  await sb.storage.from(BUCKET).upload(annotationsPath(key), blob, { upsert: true });
-}
-
-// ─── COMMENTS (Supabase Storage JSON) ────────────────────────────────────
-function commentsPath(key) {
-  return `annotations/${key}_comments.json`;
-}
-
-async function loadComments(key) {
-  try {
-    const url = publicUrl(commentsPath(key));
-    const res = await fetch(url);
-    if (res.ok) comments[key] = await res.json();
-    else comments[key] = [];
-  } catch { comments[key] = []; }
-}
-
-async function saveComments(key) {
-  const blob = new Blob([JSON.stringify(comments[key])], { type: "application/json" });
-  await sb.storage.from(BUCKET).upload(commentsPath(key), blob, { upsert: true });
-}
-
-document.getElementById("btn-add-comment").addEventListener("click", addComment);
-commentInput.addEventListener("keydown", e => { if (e.key === "Enter" && e.ctrlKey) addComment(); });
-
-async function addComment() {
-  const text = commentInput.value.trim();
-  if (!text || !currentShot) return;
-  const c = { id: Date.now().toString(36) + Math.random().toString(36).slice(2), time: video.currentTime, text };
-  if (!comments[currentShot]) comments[currentShot] = [];
-  comments[currentShot].push(c);
-  comments[currentShot].sort((a,b) => a.time - b.time);
-  commentInput.value = "";
-  await saveComments(currentShot);
-  renderComments();
-  renderMarkers();
-  renderShotList();
-  showToast("Comment added", "ok");
-}
-
-function renderComments() {
-  const list = comments[currentShot] || [];
-  commentCount.textContent = list.length;
-  commentsList.innerHTML = "";
-  if (!list.length) {
-    commentsList.innerHTML = `<div style="padding:16px;color:var(--muted);font-family:var(--mono);font-size:11px;text-align:center;">No comments yet.<br>Play & pause, then type below.</div>`;
-    return;
-  }
-  list.forEach(c => {
-    const card = document.createElement("div");
-    card.className = "comment-card";
-    card.dataset.id = c.id;
-    card.innerHTML = `
-      <div class="comment-tc">${fmt(c.time)}</div>
-      <div class="comment-text">${escHtml(c.text)}</div>
-      <div class="comment-actions">
-        <button class="btn-edit" data-id="${c.id}">Edit</button>
-        <button class="btn-del" data-id="${c.id}">Delete</button>
-      </div>`;
-    card.addEventListener("click", e => {
-      if (e.target.closest(".comment-actions")) return;
-      video.currentTime = c.time;
-      highlightComment(c.id);
-    });
-    card.querySelector(".btn-edit").addEventListener("click", () => openEditModal(c.id));
-    card.querySelector(".btn-del").addEventListener("click",  () => deleteComment(c.id));
-    commentsList.appendChild(card);
+// MARKERS
+function renderMarkers(){
+  tlMk.innerHTML="";
+  if(!currentShot||!video.duration) return;
+  const dur=video.duration;
+  // sketch markers
+  Object.keys(annotations[currentShot]||{}).forEach(f=>{
+    if(!(annotations[currentShot][f]||[]).length) return;
+    const pct=(toT(parseInt(f))/dur)*100;
+    const m=document.createElement("div"); m.className="sk-mk"; m.style.left=pct+"%"; m.title=`Sketch F${f}`;
+    m.addEventListener("click",e=>{ e.stopPropagation(); video.currentTime=toT(parseInt(f)); });
+    tlMk.appendChild(m);
+  });
+  // comment markers
+  (comments[currentShot]||[]).forEach(c=>{
+    const pct=(c.time/dur)*100;
+    const m=document.createElement("div"); m.className="cm-mk"; m.style.left=pct+"%"; m.title=`${fmtTC(c.time)}: ${c.text.slice(0,30)}`;
+    m.addEventListener("click",e=>{ e.stopPropagation(); video.currentTime=c.time; hlCom(c.id); });
+    tlMk.appendChild(m);
   });
 }
 
-function highlightComment(id) {
-  document.querySelectorAll(".comment-card").forEach(el => el.classList.toggle("highlight", el.dataset.id === id));
-}
+// PLAYBACK
+document.getElementById("btn-pp").addEventListener("click",()=>video.paused?video.play():video.pause());
+document.getElementById("btn-stepb").addEventListener("click",()=>{ if(video.duration) video.currentTime=Math.max(0,video.currentTime-1/FPS); });
+document.getElementById("btn-stepf").addEventListener("click",()=>{ if(video.duration) video.currentTime=Math.min(video.duration,video.currentTime+1/FPS); });
+document.getElementById("btn-prev").addEventListener("click",()=>prevNext(-1));
+document.getElementById("btn-next").addEventListener("click",()=>prevNext(1));
+document.getElementById("vol").addEventListener("input",e=>video.volume=e.target.value);
+document.getElementById("spd-sel").addEventListener("change",e=>video.playbackRate=parseFloat(e.target.value));
+document.getElementById("btn-full").addEventListener("click",()=>pw.requestFullscreen?.());
+function prevNext(d){ if(!currentShot) return; const n=shotOrder[shotOrder.indexOf(currentShot)+d]; if(n) loadShot(n); }
 
-function escHtml(str) {
-  return str.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
-}
-
-// ─── EDIT MODAL ───────────────────────────────────────────────────────────
-function openEditModal(id) {
-  const c = (comments[currentShot] || []).find(x => x.id === id);
-  if (!c) return;
-  editingCommentId = id;
-  document.getElementById("modal-input").value = c.text;
-  modalOverlay.classList.add("open");
-  document.getElementById("modal-input").focus();
-}
-
-document.getElementById("modal-cancel").addEventListener("click", () => {
-  modalOverlay.classList.remove("open");
-  editingCommentId = null;
+// KEYBOARD
+document.addEventListener("keydown",e=>{
+  const tg=e.target.tagName; if(tg==="TEXTAREA"||tg==="INPUT") return;
+  if(e.code==="Space"){ e.preventDefault(); video.paused?video.play():video.pause(); }
+  if(e.code==="ArrowLeft"){ e.preventDefault(); if(video.duration) video.currentTime=Math.max(0,video.currentTime-(e.shiftKey?10:1)/FPS); }
+  if(e.code==="ArrowRight"){ e.preventDefault(); if(video.duration) video.currentTime=Math.min(video.duration,video.currentTime+(e.shiftKey?10:1)/FPS); }
+  if(e.code==="Home") video.currentTime=0;
+  if(e.code==="End") video.currentTime=video.duration||0;
+  if(e.code==="KeyD") document.getElementById("btn-draw").click();
+  if(!drawMode) return;
+  const toolMap={KeyP:"pen",KeyA:"arrow",KeyR:"rect",KeyE:"ellipse",KeyT:"text",KeyX:"eraser"};
+  if(toolMap[e.code]) document.querySelector(`[data-tool="${toolMap[e.code]}"]`)?.click();
+  if((e.ctrlKey||e.metaKey)&&e.code==="KeyZ"){ e.preventDefault(); undo(); }
+  if((e.ctrlKey||e.metaKey)&&e.code==="KeyY"){ e.preventDefault(); redo(); }
 });
 
-document.getElementById("modal-confirm").addEventListener("click", async () => {
-  const text = document.getElementById("modal-input").value.trim();
-  if (!text || !editingCommentId || !currentShot) return;
-  const c = comments[currentShot].find(x => x.id === editingCommentId);
-  if (c) c.text = text;
-  await saveComments(currentShot);
-  renderComments();
-  modalOverlay.classList.remove("open");
-  editingCommentId = null;
-  showToast("Comment updated", "ok");
+// PLAY SCENE — double buffer
+document.getElementById("btn-play-scene").addEventListener("click",()=>{
+  if(!shotOrder.length) return; isSceneMode=true; sceneIdx=0; loadSceneShot(0);
+});
+function loadSceneShot(idx){
+  const key=shotOrder[idx]; if(!key) return;
+  currentShot=key; ph.style.display="none"; video.style.display="block";
+  if(videoPre.src===shots[key].url&&videoPre.readyState>=2){ video.src=videoPre.src; video.currentTime=0; }
+  else { video.src=shots[key].url; video.load(); }
+  video.play().catch(()=>{});
+  preloadNext(idx+1);
+  loadAnn(key).then(()=>loadCom(key).then(()=>{ renderShotList(); renderComments(); renderMarkers(); }));
+}
+function preloadNext(idx){ const key=shotOrder[idx]; if(!key){videoPre.src="";return;} videoPre.src=shots[key].url; videoPre.load(); }
+
+// EXPORT
+document.getElementById("btn-export").addEventListener("click",async()=>{
+  if(EXPORT_SVC.includes("SEU_SERVICO")){toast_("Export service not configured","err");return;}
+  toast_("Exporting…");
+  try{
+    const r=await fetch(EXPORT_SVC,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({shots:shotOrder})});
+    const j=await r.json(); j.ok?(toast_("Export ready!","ok"),window.open(j.url,"_blank")):toast_("Error: "+j.error,"err");
+  }catch(e){toast_("Failed: "+e.message,"err");}
 });
 
-async function deleteComment(id) {
-  if (!currentShot) return;
-  comments[currentShot] = (comments[currentShot] || []).filter(c => c.id !== id);
-  await saveComments(currentShot);
-  renderComments();
-  renderMarkers();
-  renderShotList();
-  showToast("Comment deleted", "");
+// UPLOAD
+document.getElementById("file-input").addEventListener("change",async e=>{
+  const files=Array.from(e.target.files); if(!files.length) return;
+  document.getElementById("upload-progress").style.display="flex";
+  for(let i=0;i<files.length;i++){
+    const f=files[i]; document.getElementById("ulabel").textContent=`${i+1}/${files.length}: ${f.name}`;
+    const p=parseShot(f.name,f.name);
+    if(!p){toast_(`Skipped ${f.name}—unrecognized format`,"err");continue;}
+    const {error}=await sb.storage.from(BUCKET).upload(`${p.shotKey}/${f.name}`,f,{upsert:true});
+    error?toast_("Upload failed: "+error.message,"err"):toast_(`Uploaded: ${f.name}`,"ok");
+  }
+  document.getElementById("upload-progress").style.display="none"; e.target.value=""; await loadShots();
+});
+
+// ANNOTATION I/O
+async function loadAnn(key){
+  try{ const r=await fetch(pubUrl(annPath(key))); annotations[key]=r.ok?await r.json():{};
+  } catch{ annotations[key]={}; }
+}
+async function saveAnn(key){
+  const b=new Blob([JSON.stringify(annotations[key])],{type:"application/json"});
+  await sb.storage.from(BUCKET).upload(annPath(key),b,{upsert:true});
 }
 
-// ─── INIT ────────────────────────────────────────────────────────────────
+// COMMENT I/O
+async function loadCom(key){
+  try{ const r=await fetch(pubUrl(comPath(key))); comments[key]=r.ok?await r.json():[];
+  } catch{ comments[key]=[]; }
+}
+async function saveCom(key){
+  const b=new Blob([JSON.stringify(comments[key])],{type:"application/json"});
+  await sb.storage.from(BUCKET).upload(comPath(key),b,{upsert:true});
+}
+
+// COMMENTS
+document.getElementById("btn-addcom").addEventListener("click",addComment);
+cinput.addEventListener("keydown",e=>{ if(e.key==="Enter"&&e.ctrlKey) addComment(); });
+async function addComment(){
+  const text=cinput.value.trim(); if(!text||!currentShot) return;
+  const f=toF(video.currentTime);
+  const c={id:Date.now().toString(36)+Math.random().toString(36).slice(2),time:video.currentTime,frame:f,text};
+  if(!comments[currentShot]) comments[currentShot]=[];
+  comments[currentShot].push(c); comments[currentShot].sort((a,b)=>a.time-b.time);
+  cinput.value=""; await saveCom(currentShot); renderComments(); renderMarkers(); renderShotList();
+  toast_("Comment added","ok");
+}
+function renderComments(){
+  const list=comments[currentShot]||[]; ccntEl.textContent=list.length;
+  clistEl.innerHTML="";
+  if(!list.length){ clistEl.innerHTML=`<div style="padding:14px;color:var(--muted);font-family:var(--mono);font-size:11px;text-align:center">No comments yet.<br>Step to a frame and type below.</div>`; return; }
+  list.forEach(c=>{
+    const hasSk=!!((annotations[currentShot]||{})[c.frame]||[]).length;
+    const card=document.createElement("div"); card.className="ccard"+(hasSk?" has-sk":""); card.dataset.id=c.id;
+    card.innerHTML=`<div class="ctc"><span>${fmtTC(c.time)}</span><span class="ctc-f">F${c.frame}</span>${hasSk?`<span class="ctc-sk">✏</span>`:""}</div><div class="ctext">${esc(c.text)}</div><div class="cacts"><button class="goto">⏎ Go</button><button class="edit">Edit</button><button class="del">✕</button></div>`;
+    card.addEventListener("click",e=>{ if(e.target.closest(".cacts")) return; jumpTo(c); });
+    card.querySelector(".goto").addEventListener("click",()=>jumpTo(c));
+    card.querySelector(".edit").addEventListener("click",()=>openModal(c.id));
+    card.querySelector(".del").addEventListener("click",()=>delComment(c.id));
+    clistEl.appendChild(card);
+  });
+}
+function jumpTo(c){ video.currentTime=c.time; hlCom(c.id); if(drawMode){redrawDraw();lastFrame=-1;} }
+function hlCom(id){ document.querySelectorAll(".ccard").forEach(el=>el.classList.toggle("hl",el.dataset.id===id)); }
+function openModal(id){ const c=(comments[currentShot]||[]).find(x=>x.id===id); if(!c) return; editingId=id; document.getElementById("minput").value=c.text; modal.classList.add("on"); document.getElementById("minput").focus(); }
+document.getElementById("mcancel").addEventListener("click",()=>{ modal.classList.remove("on"); editingId=null; });
+document.getElementById("mok").addEventListener("click",async()=>{
+  const text=document.getElementById("minput").value.trim(); if(!text||!editingId||!currentShot) return;
+  const c=comments[currentShot].find(x=>x.id===editingId); if(c) c.text=text;
+  await saveCom(currentShot); renderComments(); modal.classList.remove("on"); editingId=null; toast_("Comment updated","ok");
+});
+async function delComment(id){
+  if(!currentShot) return; comments[currentShot]=(comments[currentShot]||[]).filter(c=>c.id!==id);
+  await saveCom(currentShot); renderComments(); renderMarkers(); renderShotList(); toast_("Deleted");
+}
+
+// STATUS
+function updateStatusPicker(){ const s=statuses[currentShot]||null; document.querySelectorAll(".sp-btn").forEach(b=>b.classList.toggle("active",b.dataset.status===s)); }
+document.querySelectorAll(".sp-btn").forEach(btn=>{
+  btn.addEventListener("click",async()=>{
+    if(!currentShot) return;
+    const st=btn.dataset.status; statuses[currentShot]=statuses[currentShot]===st?null:st;
+    updateStatusPicker(); renderShotList();
+    toast_(`Status: ${statuses[currentShot]||"cleared"}`,"ok");
+  });
+});
+
+function updateTC(){ const ct=video.currentTime||0, dur=video.duration||0; tcEl.textContent=`${fmtTC(ct)} / ${fmtTC(dur)}`; fnEl.textContent=`F${toF(ct)}`; ctcEl.textContent=`@ F${toF(ct)} — ${fmtTC(ct)}`; }
+
+// INIT
 loadShots();
-
-// Auto-refresh every 30s (multi-user)
 setInterval(loadShots, 30000);
 </script>
 </body>
